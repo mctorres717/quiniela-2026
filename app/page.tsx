@@ -174,12 +174,12 @@ export default function QuinielaApp() {
               else audioRef.current?.play();
               setIsPlaying(!isPlaying);
             }} 
-            className="text-amber-500 hover:text-amber-400 text-xs font-bold transition-transform active:scale-95 flex items-center gap-2 uppercase tracking-widest"
+            className="text-red-500 hover:text-red-400 text-xs font-bold transition-transform active:scale-95 flex items-center gap-2 uppercase tracking-widest"
           >
             {isPlaying ? '⏸ Pausar' : '▶ Play'}
           </button>
           <div className="h-4 w-px bg-gray-700 mx-3"></div>
-          <button onClick={() => setView('LOGIN')} className="text-[10px] text-red-400 hover:text-red-500 font-bold uppercase tracking-widest">SALIR</button>
+          <button onClick={() => setView('LOGIN')} className="text-[10px] text-gray-400 hover:text-white font-bold uppercase tracking-widest">SALIR</button>
         </div>
       </header>
 
@@ -207,20 +207,20 @@ export default function QuinielaApp() {
         {activeTab === 'CALENDARIO' && (
           <div className="flex flex-col md:flex-row gap-6">
             <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
-              <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === 'HOY' ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>FECHAS</button>
+              <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === 'HOY' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>FECHAS</button>
               {['A','B','C','D','E','F','G','H','I','J','K','L'].map(g => (
-                <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === g ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 border border-gray-800'}`}>GRUPO {g}</button>
+                <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === g ? 'bg-red-600 text-white shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>GRUPO {g}</button>
               ))}
             </div>
 
             <div className="flex-1">
               <div className="flex items-center justify-between mb-4 bg-gray-900 p-3 rounded-lg border border-gray-800">
                 {grupoActivo === 'HOY' ? (
-                  <select value={fechaHoyStr} onChange={(e) => setFechaHoyStr(e.target.value)} className="bg-black text-amber-500 font-bold border border-gray-700 rounded p-2 text-sm outline-none w-full md:w-auto focus:border-amber-500">
+                  <select value={fechaHoyStr} onChange={(e) => setFechaHoyStr(e.target.value)} className="bg-black text-red-500 font-bold border border-gray-700 rounded p-2 text-sm outline-none w-full md:w-auto focus:border-red-500">
                     {fechasMundial.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 ) : (
-                  <h2 className="text-amber-500 font-bold uppercase tracking-widest text-sm">Partidos Grupo {grupoActivo}</h2>
+                  <h2 className="text-red-500 font-bold uppercase tracking-widest text-sm">Partidos Grupo {grupoActivo}</h2>
                 )}
               </div>
 
@@ -230,7 +230,6 @@ export default function QuinielaApp() {
                     <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_local}</span></div>
                     <div className="w-1/5 flex flex-col items-center">
                       <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
-                      {/* MODIFICACIÓN: COLORES DEL MARCADOR TOTALMENTE UNIFICADOS CON LA QUINIELA (ROJO) */}
                       <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
                         {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
                       </span>

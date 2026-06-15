@@ -230,7 +230,7 @@ export default function QuinielaApp() {
                     <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_local}</span></div>
                     <div className="w-1/5 flex flex-col items-center">
                       <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
-                      {/* COLORES UNIFICADOS CON LA QUINIELA */}
+                      {/* MODIFICACIÓN: COLORES DEL MARCADOR TOTALMENTE UNIFICADOS CON LA QUINIELA (ROJO) */}
                       <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
                         {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
                       </span>

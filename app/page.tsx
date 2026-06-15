@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // --- CONFIGURACIÓN DE SUPABASE ---
@@ -16,11 +16,10 @@ const getGrupoPorId = (id: number) => {
 
 export default function QuinielaApp() {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'DASHBOARD'>('LOGIN');
-  // SE AGREGA LA PESTAÑA CALENDARIO
   const [activeTab, setActiveTab] = useState<'CALENDARIO' | 'VOTAR' | 'MIS_VOTOS' | 'RESULTADOS' | 'TABLA'>('CALENDARIO');
   const [currentUser, setCurrentUser] = useState<any>(null);
   
-  // Datos
+  // Datos Dinámicos
   const [users, setUsers] = useState<any[]>([]);
   const [votes, setVotes] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
@@ -34,6 +33,11 @@ export default function QuinielaApp() {
   const [selectedMatchId, setSelectedMatchId] = useState('');
   const [golesA, setGolesA] = useState('');
   const [golesB, setGolesB] = useState('');
+
+  // Control de Audio
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const fetchSupabaseData = async () => {
@@ -63,6 +67,14 @@ export default function QuinielaApp() {
 
     return () => { supabase.removeChannel(channel); };
   }, [fechaHoyStr]);
+
+  // Auto-reproductor de música
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.loop = true;
+      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => console.log("Interacción requerida"));
+    }
+  }, [view]);
 
   const handleRegister = async () => {
     if (!form.nombre || !form.apellido || !form.usuario || form.pin.length !== 4) return alert('Llena todos los campos');
@@ -99,28 +111,28 @@ export default function QuinielaApp() {
     }).sort((a, b) => b.puntos - a.puntos);
   };
 
-  // Login Screen (Simplificada para espacio)
   if (view === 'LOGIN' || view === 'REGISTER') {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
-        <div className="bg-gray-900 p-8 rounded-xl w-full max-w-md border border-gray-800">
-          <h1 className="text-4xl font-sports text-red-500 mb-6 text-center">Quiniela 2026</h1>
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+        <div className="bg-gray-900/90 backdrop-blur p-8 rounded-xl w-full max-w-md border border-gray-800 z-10 shadow-2xl">
+          <h1 className="text-4xl font-sports text-red-500 mb-6 text-center">Quiniela Mundial 2026</h1>
           {view === 'LOGIN' ? (
             <div className="space-y-4">
-              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white" onChange={e => setLoginForm({...loginForm, usuario: e.target.value})} />
-              <input type="password" placeholder="PIN" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white" onChange={e => setLoginForm({...loginForm, pin: e.target.value})} />
-              <button onClick={handleLogin} className="w-full bg-red-600 text-white font-bold py-3 rounded">Ingresar</button>
-              <p className="text-center text-gray-400 mt-4 cursor-pointer" onClick={() => setView('REGISTER')}>Regístrate</p>
+              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setLoginForm({...loginForm, usuario: e.target.value})} />
+              <input type="password" placeholder="PIN" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onChange={e => setLoginForm({...loginForm, pin: e.target.value})} />
+              <button onClick={handleLogin} className="w-full bg-red-600 font-bold py-3 rounded uppercase tracking-wider hover:bg-red-500 transition">Ingresar</button>
+              <p className="text-center text-gray-400 mt-4 text-sm">¿No tienes cuenta? <span className="text-red-500 cursor-pointer font-bold" onClick={() => setView('REGISTER')}>Regístrate</span></p>
             </div>
           ) : (
             <div className="space-y-4">
-              <input type="text" placeholder="Nombre" className="w-full p-3 rounded bg-black border border-gray-700 text-white" onChange={e => setForm({...form, nombre: e.target.value})} />
-              <input type="text" placeholder="Apellido" className="w-full p-3 rounded bg-black border border-gray-700 text-white" onChange={e => setForm({...form, apellido: e.target.value})} />
-              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white" onChange={e => setForm({...form, usuario: e.target.value})} />
-              <input type="password" placeholder="PIN (4 dígitos)" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white" onChange={e => setForm({...form, pin: e.target.value})} />
-              <button onClick={handleRegister} className="w-full bg-red-600 text-white font-bold py-3 rounded">Registrarme</button>
-              <p className="text-center text-gray-400 mt-4 cursor-pointer" onClick={() => setView('LOGIN')}>Inicia Sesión</p>
+              <input type="text" placeholder="Nombre" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, nombre: e.target.value})} />
+              <input type="text" placeholder="Apellido" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, apellido: e.target.value})} />
+              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, usuario: e.target.value})} />
+              <input type="password" placeholder="PIN (4 dígitos)" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onChange={e => setForm({...form, pin: e.target.value})} />
+              <button onClick={handleRegister} className="w-full bg-red-600 text-white font-bold py-3 rounded uppercase tracking-wider hover:bg-red-500 transition">Registrarme</button>
+              <p className="text-center text-gray-400 mt-4 text-sm">¿Ya tienes cuenta? <span className="text-red-500 cursor-pointer font-bold" onClick={() => setView('LOGIN')}>Inicia Sesión</span></p>
             </div>
           )}
         </div>
@@ -128,7 +140,6 @@ export default function QuinielaApp() {
     );
   }
 
-  // Lógica Calendario
   const partidosFiltrados = grupoActivo === 'HOY' 
     ? partidos.filter(match => match.date.includes(fechaHoyStr))
     : partidos.filter(match => getGrupoPorId(match.id) === grupoActivo);
@@ -136,43 +147,76 @@ export default function QuinielaApp() {
   const partidosPendientes = partidos.filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario));
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white relative">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
       
-      <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center">
-        <h1 className="text-xl md:text-2xl font-sports text-red-500">Mundial 2026</h1>
-        <div className="flex gap-4 items-center">
-          <span className="hidden md:inline">{currentUser?.nombre}</span>
-          <button onClick={() => setView('LOGIN')} className="text-xs bg-gray-800 px-3 py-1 rounded">SALIR</button>
+      {/* FONDO PANORÁMICO DEPORTIVO EN MÓVIL Y PC */}
+      <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+
+      {/* HEADER CON CONTROL DE AUDIO COMPACTO */}
+      <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center relative z-10">
+        <div>
+          <h1 className="text-2xl font-sports text-red-500">Quiniela Mundial 2026</h1>
+          <p className="text-[10px] text-gray-500 font-semibold tracking-wider uppercase">Analista: {currentUser?.nombre} {currentUser?.apellido}</p>
+        </div>
+        
+        {/* REPRODUCTOR COMPACTO CALENDARIO-STYLE */}
+        <div className="bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700 flex items-center gap-3 w-44 md:w-52 shadow-lg">
+          <audio ref={audioRef} src="/cancion_oficial.mp3" onTimeUpdate={() => setProgress(audioRef.current?.currentTime || 0)} />
+          <button 
+            onClick={() => {
+              if (isPlaying) audioRef.current?.pause();
+              else audioRef.current?.play();
+              setIsPlaying(!isPlaying);
+            }} 
+            className="text-amber-500 hover:text-amber-400 text-xs font-bold transition-transform active:scale-90"
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <div className="flex-1">
+            <input 
+              type="range" min="0" max={audioRef.current?.duration || 100} value={progress} 
+              onChange={(e) => {
+                const val = Number(e.target.value); setProgress(val);
+                if (audioRef.current) audioRef.current.currentTime = val;
+              }}
+              className="w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer accent-amber-500"
+            />
+          </div>
+          <button onClick={() => setView('LOGIN')} className="text-[10px] text-red-400 hover:text-red-500 font-bold ml-1 border-l border-gray-700 pl-2">SALIR</button>
         </div>
       </header>
 
-      {/* Pestañas Horizontales Scrolleables (Mobile friendly) */}
-      <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 scrollbar-hide">
-        {[{ id: 'CALENDARIO', label: 'Calendario' }, { id: 'VOTAR', label: 'Votar' }, { id: 'MIS_VOTOS', label: 'Mis Votos' }, { id: 'RESULTADOS', label: 'Resultados' }, { id: 'TABLA', label: 'Posiciones' }].map(tab => (
+      {/* PESTAÑAS HORIZONTALES */}
+      <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
+        {[
+          { id: 'CALENDARIO', label: 'Calendario' }, 
+          { id: 'VOTAR', label: 'Votar' }, 
+          { id: 'MIS_VOTOS', label: 'Mi Vestuario' }, 
+          { id: 'RESULTADOS', label: 'Resultados' }, 
+          { id: 'TABLA', label: 'Posiciones' }
+        ].map(tab => (
           <button 
             key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-none min-w-[120px] py-4 text-xs md:text-sm font-bold uppercase transition ${activeTab === tab.id ? 'text-red-500 border-b-2 border-red-500 bg-red-900/10' : 'text-gray-500'}`}
+            className={`flex-none min-w-[110px] md:flex-1 py-4 text-xs font-bold uppercase tracking-wider transition ${activeTab === tab.id ? 'text-red-500 border-b-2 border-red-500 bg-red-900/10' : 'text-gray-500 hover:text-gray-300'}`}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      <main className="p-4 md:p-6 max-w-6xl mx-auto">
+      <main className="p-4 md:p-6 max-w-6xl mx-auto relative z-10">
         
         {/* PESTAÑA 1: CALENDARIO OFICIAL */}
         {activeTab === 'CALENDARIO' && (
           <div className="flex flex-col md:flex-row gap-6">
-            {/* Controles de Grupo/Fecha (Arriba en móvil, lado en PC) */}
-            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">
-              <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2 flex-none md:w-full rounded text-xs font-bold ${grupoActivo === 'HOY' ? 'bg-amber-500 text-black' : 'bg-gray-800 text-gray-400'}`}>FECHAS</button>
+            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
+              <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase ${grupoActivo === 'HOY' ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>FECHAS</button>
               {['A','B','C','D','E','F','G','H','I','J','K','L'].map(g => (
-                <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2 flex-none md:w-full rounded text-xs font-bold ${grupoActivo === g ? 'bg-amber-500 text-black' : 'bg-gray-900 border border-gray-800'}`}>GRUPO {g}</button>
+                <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase ${grupoActivo === g ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 border border-gray-800'}`}>GRUPO {g}</button>
               ))}
             </div>
 
-            {/* Grid de Partidos (Responsive) */}
             <div className="flex-1">
               <div className="flex items-center justify-between mb-4 bg-gray-900 p-3 rounded-lg border border-gray-800">
                 {grupoActivo === 'HOY' ? (
@@ -180,25 +224,21 @@ export default function QuinielaApp() {
                     {fechasMundial.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 ) : (
-                  <h2 className="text-amber-500 font-bold uppercase tracking-widest">Partidos Grupo {grupoActivo}</h2>
+                  <h2 className="text-amber-500 font-bold uppercase tracking-widest text-sm">Partidos Grupo {grupoActivo}</h2>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {partidosFiltrados.map((match) => (
-                  <div key={match.id} className="bg-gray-900/80 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
-                    <div className="flex flex-col items-center w-2/5">
-                      <span className="font-sports text-xl truncate w-full text-center">{match.equipo_local}</span>
-                    </div>
-                    <div className="flex flex-col items-center w-1/5">
-                      <span className="text-[10px] text-gray-500 mb-1">{match.date.split(' | ')[1]}</span>
-                      <span className={`px-3 py-1 rounded text-lg font-sports ${match.status === 'FINISHED' ? 'bg-emerald-600 text-white' : 'bg-black text-gray-500 border border-gray-800'}`}>
+                  <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
+                    <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_local}</span></div>
+                    <div className="w-1/5 flex flex-col items-center">
+                      <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
+                      <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-emerald-600 text-white' : 'bg-black text-gray-500 border border-gray-800'}`}>
                         {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
                       </span>
                     </div>
-                    <div className="flex flex-col items-center w-2/5">
-                      <span className="font-sports text-xl truncate w-full text-center">{match.equipo_visitante}</span>
-                    </div>
+                    <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_visitante}</span></div>
                   </div>
                 ))}
               </div>
@@ -206,59 +246,135 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* LAS OTRAS PESTAÑAS (Simplificadas para mantener estructura) */}
+        {/* PESTAÑA 2: VOTAR */}
         {activeTab === 'VOTAR' && (
-           <div className="bg-gray-900 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto">
-             <select className="w-full p-4 mb-6 rounded-lg bg-black text-white" value={selectedMatchId} onChange={e => setSelectedMatchId(e.target.value)}>
-               <option value="">-- Elige un partido --</option>
+           <div className="bg-gray-900/90 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto shadow-2xl">
+             <h2 className="text-xl font-sports text-red-500 mb-4 uppercase border-b border-gray-800 pb-2">Hacer Predicción</h2>
+             <select className="w-full p-4 mb-6 rounded-lg bg-black text-white font-semibold border border-gray-800 outline-none text-sm" value={selectedMatchId} onChange={e => setSelectedMatchId(e.target.value)}>
+               <option value="">-- Selecciona un juego programado --</option>
                {partidosPendientes.map(p => <option key={p.id} value={p.id}>{p.date} | {p.equipo_local} vs {p.equipo_visitante}</option>)}
              </select>
              {selectedMatchId && (
-               <div className="flex justify-between items-center mb-6 bg-black p-4 rounded border border-gray-800">
-                 <input type="number" value={golesA} onChange={e => setGolesA(e.target.value)} className="w-16 text-center text-2xl font-bold bg-gray-900 p-2 rounded text-white outline-none" />
-                 <span className="font-sports text-xl">VS</span>
-                 <input type="number" value={golesB} onChange={e => setGolesB(e.target.value)} className="w-16 text-center text-2xl font-bold bg-gray-900 p-2 rounded text-white outline-none" />
+               <div className="flex justify-between items-center mb-6 bg-black p-6 rounded-xl border border-gray-800">
+                 <div className="text-center w-1/3">
+                   <p className="font-sports text-lg mb-2 text-gray-300">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local}</p>
+                   <input type="number" min="0" value={golesA} onChange={e => setGolesA(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
+                 </div>
+                 <span className="font-sports text-xl text-red-500">VS</span>
+                 <div className="text-center w-1/3">
+                   <p className="font-sports text-lg mb-2 text-gray-300">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante}</p>
+                   <input type="number" min="0" value={golesB} onChange={e => setGolesB(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
+                 </div>
                </div>
              )}
-             <button onClick={handleVote} className="w-full bg-red-600 font-bold py-4 rounded text-white uppercase">Confirmar Predicción</button>
+             <button onClick={handleVote} disabled={!selectedMatchId} className={`w-full font-bold py-4 rounded-lg uppercase tracking-widest text-xs transition ${selectedMatchId ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>Confirmar Predicción</button>
+             {partidosPendientes.length === 0 && <p className="text-center text-green-500 mt-4 font-bold tracking-widest text-sm uppercase">⚽ ¡Vestuario completo! Has votado en todo. ⚽</p>}
            </div>
         )}
 
+        {/* PESTAÑA 3: MI VESTUARIO (RESALTADO CON COLORES) */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
                const p = partidos.find(pa => pa.id === voto.partido_id);
+               
+               // Sistema Inteligente de Feedback de Puntos
+               let puntosGanados = 0;
+               let estiloCard = "border-gray-800 bg-gray-900/90";
+               let colorTextoPuntos = "text-gray-500";
+               
+               if (p?.status === 'FINISHED' && p?.goles_local !== null) {
+                 const acertoMarcador = (voto.goles_local === p.goles_local && voto.goles_visitante === p.goles_visitante);
+                 const acertoGanador = (voto.goles_local > voto.goles_visitante && p.goles_local > p.goles_visitante) || 
+                                       (voto.goles_local < voto.goles_visitante && p.goles_local < p.goles_visitante) || 
+                                       (voto.goles_local === voto.goles_visitante && p.goles_local === p.goles_visitante);
+                 if (acertoMarcador) { 
+                   puntosGanados = 3; estiloCard = "border-green-600/50 bg-green-950/10 shadow-green-900/10"; colorTextoPuntos = "text-green-500"; 
+                 } else if (acertoGanador) { 
+                   puntosGanados = 1; estiloCard = "border-yellow-600/50 bg-yellow-950/10 shadow-yellow-900/10"; colorTextoPuntos = "text-yellow-500"; 
+                 } else { 
+                   estiloCard = "border-red-900/50 bg-red-950/5 shadow-red-900/5"; colorTextoPuntos = "text-red-500"; 
+                 }
+               }
+
                return (
-                 <div key={idx} className="bg-gray-900 p-4 rounded-lg border border-gray-800 flex justify-between items-center">
-                   <div><p className="text-xs text-gray-500">{p?.date}</p><p className="font-sports text-xl">{p?.equipo_local} vs {p?.equipo_visitante}</p></div>
-                   <div className="bg-black px-4 py-2 rounded text-center"><p className="text-2xl font-sports text-red-500">{voto.goles_local} - {voto.goles_visitante}</p></div>
+                 <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center shadow-lg transition-all ${estiloCard}`}>
+                   <div>
+                     <p className="text-[10px] text-gray-500 font-mono mb-0.5">{p?.date}</p>
+                     <p className="font-sports text-xl text-white tracking-wider">{p?.equipo_local} <span className="text-gray-600 text-xs font-sans normal-case mx-1">vs</span> {p?.equipo_visitante}</p>
+                     {p?.status === 'FINISHED' && (
+                       <span className={`text-[10px] font-bold uppercase tracking-widest block mt-2 ${colorTextoPuntos}`}>
+                         {puntosGanados > 0 ? `+${puntosGanados} Puntos Obtenidos` : '0 Puntos (Fallo)'}
+                       </span>
+                     )}
+                   </div>
+                   <div className="bg-black px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[80px]">
+                     <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Tu Voto</p>
+                     <p className="text-2xl font-sports text-red-500 tracking-widest">{voto.goles_local}-{voto.goles_visitante}</p>
+                   </div>
                  </div>
                )
              })}
            </div>
         )}
 
+        {/* PESTAÑA 4: RESULTADOS */}
         {activeTab === 'RESULTADOS' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {partidos.filter(p => p.status === 'FINISHED').map(p => (
-               <div key={p.id} className="bg-gray-900 p-4 rounded-lg border border-gray-800 flex justify-between items-center">
-                 <div><p className="text-xs text-gray-500">{p.date}</p><p className="font-sports text-xl">{p.equipo_local} vs {p.equipo_visitante}</p></div>
-                 <div className="bg-red-900/30 px-4 py-2 rounded text-center"><p className="text-2xl font-sports text-emerald-500">{p.goles_local} - {p.goles_visitante}</p></div>
+               <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
+                 <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante}</p></div>
+                 <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
+                   <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
+                   <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                 </div>
                </div>
              ))}
+             {partidos.filter(p => p.status === 'FINISHED').length === 0 && <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium">Esperando el pitazo inicial de la FIFA...</p>}
            </div>
         )}
 
+        {/* PESTAÑA 5: TABLA DE POSICIONES CON REGLAMENTO LATERAL */}
         {activeTab === 'TABLA' && (
-           <div className="bg-gray-900 rounded-xl border border-gray-800">
-             {calcularPuntos().map((user, idx) => (
-               <div key={user.usuario} className="p-4 flex justify-between items-center border-b border-gray-800/50">
-                 <span className="w-12 font-sports text-2xl text-gray-500">{idx + 1}°</span>
-                 <span className="flex-1 font-bold">{user.nombre} {user.apellido}</span>
-                 <span className="w-20 text-center font-sports text-3xl text-red-500">{user.puntos}</span>
-               </div>
-             ))}
-           </div>
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Lado Izquierdo: Tabla */}
+            <div className="flex-1 bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+              <div className="bg-black p-4 flex justify-between border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                <span className="w-12 text-center">Rango</span>
+                <span className="flex-1 pl-2">Analista</span>
+                <span className="w-20 text-center">Score</span>
+              </div>
+              {calcularPuntos().map((user, idx) => (
+                <div key={user.usuario} className={`p-4 flex justify-between items-center border-b border-gray-800/40 ${user.usuario === currentUser.usuario ? 'bg-red-900/10' : 'hover:bg-gray-800/50'}`}>
+                  <span className={`w-12 text-center font-sports text-2xl ${idx === 0 ? 'text-red-500' : 'text-gray-500'}`}>{idx + 1}°</span>
+                  <span className="flex-1 font-bold text-sm uppercase tracking-wider pl-2">
+                    {user.nombre} {user.apellido}
+                    {user.usuario === currentUser.usuario && <span className="ml-2 text-[9px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded border border-red-500/30 font-sans normal-case font-bold">Tú</span>}
+                  </span>
+                  <span className="w-20 text-center font-sports text-3xl text-red-500 tracking-wider">{user.puntos}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Lado Derecho: Reglamento Fijo */}
+            <div className="w-full lg:w-72 bg-gray-900/90 p-6 rounded-xl border border-gray-800 h-fit shadow-2xl">
+              <h3 className="text-red-500 font-sports text-2xl tracking-widest border-b border-gray-800 pb-2 mb-4">Reglamento</h3>
+              <ul className="space-y-4 text-xs text-gray-400 font-medium">
+                <li className="flex items-start gap-2.5">
+                  <span className="text-green-500 font-sports text-2xl leading-none">+3</span>
+                  <p><strong>Marcador Exacto:</strong> Atinar milimétricamente a la cantidad de goles de ambos equipos.</p>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="text-yellow-500 font-sports text-2xl leading-none">+1</span>
+                  <p><strong>Acierto de Ganador:</strong> Acertar cuál equipo triunfa o si hay empate, pero errando los goles exactos.</p>
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="text-red-500 font-sports text-2xl leading-none">0</span>
+                  <p><strong>Fallo Absoluto:</strong> No acertar ni la tendencia del ganador ni los goles anotados.</p>
+                </li>
+              </ul>
+            </div>
+          </div>
         )}
       </main>
     </div>

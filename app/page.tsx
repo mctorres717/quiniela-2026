@@ -33,7 +33,7 @@ export default function QuinielaApp() {
   useEffect(() => {
     const fetchSupabaseData = async () => {
       try {
-        const { data: usuariosData, error: errUsr } = await supabase.from('users').select('*'); // O 'usuarios' según lo hayas dejado
+        const { data: usuariosData, error: errUsr } = await supabase.from('usuarios').select('*'); // O 'usuarios' según lo hayas dejado
         if (!errUsr) setUsers(usuariosData || []);
 
         const { data: votosData, error: errVot } = await supabase.from('votos').select('*');
@@ -65,7 +65,7 @@ export default function QuinielaApp() {
       alert('Llena todos los campos. El PIN debe ser de 4 dígitos.'); return;
     }
     try {
-      const { error } = await supabase.from('users').insert([form]); // Cambia 'users' por 'usuarios' si tu tabla se llama así
+      const { error } = await supabase.from('usuarios').insert([form]); // Cambia 'users' por 'usuarios' si tu tabla se llama así
       if (error) throw error;
       alert('Registro exitoso. Ahora inicia sesión.');
       setView('LOGIN');

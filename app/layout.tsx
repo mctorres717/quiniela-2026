@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Create Next App",
-  description: "Quiniela Oficial de la Copa del Mundo",
+  title: "Quiniela Mundial 2026",
+  description: "Quiniela Oficial de la Copa del Mundo 2026",
 };
 
 export default function RootLayout({

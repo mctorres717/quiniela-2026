@@ -34,10 +34,9 @@ export default function QuinielaApp() {
   const [golesA, setGolesA] = useState('');
   const [golesB, setGolesB] = useState('');
 
-  // Control de Audio
+  // Control de Audio (Simplificado)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
 
   useEffect(() => {
     const fetchSupabaseData = async () => {
@@ -75,6 +74,10 @@ export default function QuinielaApp() {
       audioRef.current.play().then(() => setIsPlaying(true)).catch(() => console.log("Interacción requerida"));
     }
   }, [view]);
+
+  // Manejadores de eventos de teclado (Tecla Enter)
+  const handleKeyDownLogin = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleLogin(); };
+  const handleKeyDownRegister = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleRegister(); };
 
   const handleRegister = async () => {
     if (!form.nombre || !form.apellido || !form.usuario || form.pin.length !== 4) return alert('Llena todos los campos');
@@ -115,22 +118,24 @@ export default function QuinielaApp() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
-        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+        {/* IMAGEN DE FONDO FIJA Y GLOBAL */}
+        <div className="fixed inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+        
         <div className="bg-gray-900/90 backdrop-blur p-8 rounded-xl w-full max-w-md border border-gray-800 z-10 shadow-2xl">
           <h1 className="text-4xl font-sports text-red-500 mb-6 text-center">Quiniela Mundial 2026</h1>
           {view === 'LOGIN' ? (
             <div className="space-y-4">
-              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setLoginForm({...loginForm, usuario: e.target.value})} />
-              <input type="password" placeholder="PIN" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onChange={e => setLoginForm({...loginForm, pin: e.target.value})} />
+              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownLogin} onChange={e => setLoginForm({...loginForm, usuario: e.target.value})} />
+              <input type="password" placeholder="PIN" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownLogin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} />
               <button onClick={handleLogin} className="w-full bg-red-600 font-bold py-3 rounded uppercase tracking-wider hover:bg-red-500 transition">Ingresar</button>
               <p className="text-center text-gray-400 mt-4 text-sm">¿No tienes cuenta? <span className="text-red-500 cursor-pointer font-bold" onClick={() => setView('REGISTER')}>Regístrate</span></p>
             </div>
           ) : (
             <div className="space-y-4">
-              <input type="text" placeholder="Nombre" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, nombre: e.target.value})} />
-              <input type="text" placeholder="Apellido" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, apellido: e.target.value})} />
-              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, usuario: e.target.value})} />
-              <input type="password" placeholder="PIN (4 dígitos)" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onChange={e => setForm({...form, pin: e.target.value})} />
+              <input type="text" placeholder="Nombre" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, nombre: e.target.value})} />
+              <input type="text" placeholder="Apellido" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, apellido: e.target.value})} />
+              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, usuario: e.target.value})} />
+              <input type="password" placeholder="PIN (4 dígitos)" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, pin: e.target.value})} />
               <button onClick={handleRegister} className="w-full bg-red-600 text-white font-bold py-3 rounded uppercase tracking-wider hover:bg-red-500 transition">Registrarme</button>
               <p className="text-center text-gray-400 mt-4 text-sm">¿Ya tienes cuenta? <span className="text-red-500 cursor-pointer font-bold" onClick={() => setView('LOGIN')}>Inicia Sesión</span></p>
             </div>
@@ -150,40 +155,31 @@ export default function QuinielaApp() {
     <div className="min-h-screen bg-black text-white relative">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
       
-      {/* FONDO PANORÁMICO DEPORTIVO EN MÓVIL Y PC */}
-      <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
+      {/* FONDO PANORÁMICO GLOBAL FIJO */}
+      <div className="fixed inset-0 opacity-10 pointer-events-none z-0" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}></div>
 
-      {/* HEADER CON CONTROL DE AUDIO COMPACTO */}
+      {/* HEADER CON CONTROL DE AUDIO COMPACTO SIN DESLIZANTE */}
       <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center relative z-10">
         <div>
           <h1 className="text-2xl font-sports text-red-500">Quiniela Mundial 2026</h1>
           <p className="text-[10px] text-gray-500 font-semibold tracking-wider uppercase">Analista: {currentUser?.nombre} {currentUser?.apellido}</p>
         </div>
         
-        {/* REPRODUCTOR COMPACTO CALENDARIO-STYLE */}
-        <div className="bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700 flex items-center gap-3 w-44 md:w-52 shadow-lg">
-          <audio ref={audioRef} src="/cancion_oficial.mp3" onTimeUpdate={() => setProgress(audioRef.current?.currentTime || 0)} />
+        {/* REPRODUCTOR COMPACTO */}
+        <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 flex items-center shadow-lg">
+          <audio ref={audioRef} src="/cancion_oficial.mp3" />
           <button 
             onClick={() => {
               if (isPlaying) audioRef.current?.pause();
               else audioRef.current?.play();
               setIsPlaying(!isPlaying);
             }} 
-            className="text-amber-500 hover:text-amber-400 text-xs font-bold transition-transform active:scale-90"
+            className="text-amber-500 hover:text-amber-400 text-xs font-bold transition-transform active:scale-95 flex items-center gap-2 uppercase tracking-widest"
           >
-            {isPlaying ? '⏸' : '▶'}
+            {isPlaying ? '⏸ Pausar' : '▶ Play'}
           </button>
-          <div className="flex-1">
-            <input 
-              type="range" min="0" max={audioRef.current?.duration || 100} value={progress} 
-              onChange={(e) => {
-                const val = Number(e.target.value); setProgress(val);
-                if (audioRef.current) audioRef.current.currentTime = val;
-              }}
-              className="w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer accent-amber-500"
-            />
-          </div>
-          <button onClick={() => setView('LOGIN')} className="text-[10px] text-red-400 hover:text-red-500 font-bold ml-1 border-l border-gray-700 pl-2">SALIR</button>
+          <div className="h-4 w-px bg-gray-700 mx-3"></div>
+          <button onClick={() => setView('LOGIN')} className="text-[10px] text-red-400 hover:text-red-500 font-bold uppercase tracking-widest">SALIR</button>
         </div>
       </header>
 
@@ -211,16 +207,16 @@ export default function QuinielaApp() {
         {activeTab === 'CALENDARIO' && (
           <div className="flex flex-col md:flex-row gap-6">
             <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
-              <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase ${grupoActivo === 'HOY' ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>FECHAS</button>
+              <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === 'HOY' ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>FECHAS</button>
               {['A','B','C','D','E','F','G','H','I','J','K','L'].map(g => (
-                <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase ${grupoActivo === g ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 border border-gray-800'}`}>GRUPO {g}</button>
+                <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === g ? 'bg-amber-500 text-black shadow-md' : 'bg-gray-900 border border-gray-800'}`}>GRUPO {g}</button>
               ))}
             </div>
 
             <div className="flex-1">
               <div className="flex items-center justify-between mb-4 bg-gray-900 p-3 rounded-lg border border-gray-800">
                 {grupoActivo === 'HOY' ? (
-                  <select value={fechaHoyStr} onChange={(e) => setFechaHoyStr(e.target.value)} className="bg-black text-amber-500 font-bold border border-gray-700 rounded p-2 text-sm outline-none w-full md:w-auto">
+                  <select value={fechaHoyStr} onChange={(e) => setFechaHoyStr(e.target.value)} className="bg-black text-amber-500 font-bold border border-gray-700 rounded p-2 text-sm outline-none w-full md:w-auto focus:border-amber-500">
                     {fechasMundial.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 ) : (
@@ -230,11 +226,12 @@ export default function QuinielaApp() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {partidosFiltrados.map((match) => (
-                  <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
+                  <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg transition-transform hover:scale-[1.02]">
                     <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_local}</span></div>
                     <div className="w-1/5 flex flex-col items-center">
                       <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
-                      <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-emerald-600 text-white' : 'bg-black text-gray-500 border border-gray-800'}`}>
+                      {/* COLORES UNIFICADOS CON LA QUINIELA */}
+                      <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
                         {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
                       </span>
                     </div>
@@ -250,7 +247,7 @@ export default function QuinielaApp() {
         {activeTab === 'VOTAR' && (
            <div className="bg-gray-900/90 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto shadow-2xl">
              <h2 className="text-xl font-sports text-red-500 mb-4 uppercase border-b border-gray-800 pb-2">Hacer Predicción</h2>
-             <select className="w-full p-4 mb-6 rounded-lg bg-black text-white font-semibold border border-gray-800 outline-none text-sm" value={selectedMatchId} onChange={e => setSelectedMatchId(e.target.value)}>
+             <select className="w-full p-4 mb-6 rounded-lg bg-black text-white font-semibold border border-gray-800 outline-none text-sm focus:border-red-500" value={selectedMatchId} onChange={e => setSelectedMatchId(e.target.value)}>
                <option value="">-- Selecciona un juego programado --</option>
                {partidosPendientes.map(p => <option key={p.id} value={p.id}>{p.date} | {p.equipo_local} vs {p.equipo_visitante}</option>)}
              </select>
@@ -272,13 +269,12 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA 3: MI VESTUARIO (RESALTADO CON COLORES) */}
+        {/* PESTAÑA 3: MI VESTUARIO */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
                const p = partidos.find(pa => pa.id === voto.partido_id);
                
-               // Sistema Inteligente de Feedback de Puntos
                let puntosGanados = 0;
                let estiloCard = "border-gray-800 bg-gray-900/90";
                let colorTextoPuntos = "text-gray-500";
@@ -334,10 +330,9 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA 5: TABLA DE POSICIONES CON REGLAMENTO LATERAL */}
+        {/* PESTAÑA 5: TABLA DE POSICIONES CON REGLAMENTO */}
         {activeTab === 'TABLA' && (
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Lado Izquierdo: Tabla */}
             <div className="flex-1 bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
               <div className="bg-black p-4 flex justify-between border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                 <span className="w-12 text-center">Rango</span>
@@ -356,7 +351,6 @@ export default function QuinielaApp() {
               ))}
             </div>
 
-            {/* Lado Derecho: Reglamento Fijo */}
             <div className="w-full lg:w-72 bg-gray-900/90 p-6 rounded-xl border border-gray-800 h-fit shadow-2xl">
               <h3 className="text-red-500 font-sports text-2xl tracking-widest border-b border-gray-800 pb-2 mb-4">Reglamento</h3>
               <ul className="space-y-4 text-xs text-gray-400 font-medium">

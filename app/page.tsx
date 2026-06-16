@@ -14,9 +14,26 @@ const getGrupoPorId = (id: number) => {
   return groups[Math.floor((id - 1) / 6)];
 };
 
+// DICCIONARIO NATIVO DE BANDERAS
+const FLAGS: Record<string, string> = {
+  "México": "🇲🇽", "Sudáfrica": "🇿🇦", "Corea del Sur": "🇰🇷", "República Checa": "🇨🇿",
+  "Canadá": "🇨🇦", "Bosnia y Herzegovina": "🇧🇦", "Catar": "🇶🇦", "Suiza": "🇨🇭",
+  "Brasil": "🇧🇷", "Marruecos": "🇲🇦", "Haití": "🇭🇹", "Escocia": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+  "Estados Unidos": "🇺🇸", "Paraguay": "🇵🇾", "Australia": "🇦🇺", "Turquía": "🇹🇷",
+  "Alemania": "🇩🇪", "Curazao": "🇨🇼", "Costa de Marfil": "🇨🇮", "Ecuador": "🇪🇨",
+  "Países Bajos": "🇳🇱", "Japón": "🇯🇵", "Suecia": "🇸🇪", "Túnez": "🇹🇳",
+  "Bélgica": "🇧🇪", "Egipto": "🇪🇬", "RI de Irán": "🇮🇷", "Nueva Zelanda": "🇳🇿",
+  "España": "🇪🇸", "Cabo Verde": "🇨🇻", "Arabia Saudí": "🇸🇦", "Uruguay": "🇺🇾",
+  "Francia": "🇫🇷", "Senegal": "🇸🇳", "Irak": "🇮🇶", "Noruega": "🇳🇴",
+  "Argentina": "🇦🇷", "Argelia": "🇩🇿", "Austria": "🇦🇹", "Jordania": "🇯🇴",
+  "Portugal": "🇵🇹", "RD de Congo": "🇨🇩", "Uzbekistán": "🇺🇿", "Colombia": "🇨🇴",
+  "Inglaterra": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Croacia": "🇭🇷", "Ghana": "🇬🇭", "Panamá": "🇵🇦"
+};
+
 export default function QuinielaApp() {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'DASHBOARD'>('LOGIN');
-  const [activeTab, setActiveTab] = useState<'CALENDARIO' | 'VOTAR' | 'MIS_VOTOS' | 'RESULTADOS' | 'TABLA'>('CALENDARIO');
+  // ORDEN DE PESTAÑAS ACTUALIZADO E INICIO EN PRINCIPAL
+  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA'>('PRINCIPAL');
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Datos Dinámicos
@@ -34,7 +51,6 @@ export default function QuinielaApp() {
   const [golesA, setGolesA] = useState('');
   const [golesB, setGolesB] = useState('');
 
-  // Control de Audio (Simplificado)
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -67,15 +83,6 @@ export default function QuinielaApp() {
     return () => { supabase.removeChannel(channel); };
   }, [fechaHoyStr]);
 
-  // Auto-reproductor de música
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.loop = true;
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => console.log("Interacción requerida"));
-    }
-  }, [view]);
-
-  // Manejadores de eventos de teclado (Tecla Enter)
   const handleKeyDownLogin = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleLogin(); };
   const handleKeyDownRegister = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleRegister(); };
 
@@ -100,7 +107,38 @@ export default function QuinielaApp() {
     else { alert('¡Predicción guardada!'); setGolesA(''); setGolesB(''); setSelectedMatchId(''); setVotes([...votes, newVote]); }
   };
 
-  const calcularPuntos = () => {
+  // MOTOR MATEMÁTICO: TABLA DEL MUNDIAL (FIFA RULES)
+  const calcularTablaMundial = () => {
+    const stats: Record<string, any> = {};
+    partidos.forEach(p => {
+      const gId = getGrupoPorId(p.id);
+      if (!stats[p.equipo_local]) stats[p.equipo_local] = { equipo: p.equipo_local, PJ: 0, PG: 0, PE: 0, PP: 0, GF: 0, GC: 0, PTS: 0, grupo: gId };
+      if (!stats[p.equipo_visitante]) stats[p.equipo_visitante] = { equipo: p.equipo_visitante, PJ: 0, PG: 0, PE: 0, PP: 0, GF: 0, GC: 0, PTS: 0, grupo: gId };
+
+      if (p.status === 'FINISHED' && p.goles_local !== null && p.goles_visitante !== null) {
+        stats[p.equipo_local].PJ += 1; stats[p.equipo_visitante].PJ += 1;
+        stats[p.equipo_local].GF += p.goles_local; stats[p.equipo_local].GC += p.goles_visitante;
+        stats[p.equipo_visitante].GF += p.goles_visitante; stats[p.equipo_visitante].GC += p.goles_local;
+
+        if (p.goles_local > p.goles_visitante) {
+          stats[p.equipo_local].PG += 1; stats[p.equipo_local].PTS += 3; stats[p.equipo_visitante].PP += 1;
+        } else if (p.goles_local < p.goles_visitante) {
+          stats[p.equipo_visitante].PG += 1; stats[p.equipo_visitante].PTS += 3; stats[p.equipo_local].PP += 1;
+        } else {
+          stats[p.equipo_local].PE += 1; stats[p.equipo_local].PTS += 1;
+          stats[p.equipo_visitante].PE += 1; stats[p.equipo_visitante].PTS += 1;
+        }
+      }
+    });
+
+    return Object.values(stats).map(s => ({ ...s, DG: s.GF - s.GC })).sort((a, b) => {
+      if (b.PTS !== a.PTS) return b.PTS - a.PTS;
+      if (b.DG !== a.DG) return b.DG - a.DG; // Criterio 2: Diferencia de Goles
+      return b.GF - a.GF; // Criterio 3: Goles a Favor
+    });
+  };
+
+  const calcularRankingQuiniela = () => {
     return users.map(user => {
       let ptos = 0;
       votes.filter(v => v.usuario === user.usuario).forEach(voto => {
@@ -118,9 +156,7 @@ export default function QuinielaApp() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4 relative overflow-hidden">
         <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
-        {/* IMAGEN DE FONDO FIJA Y GLOBAL */}
-        <div className="fixed inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
-        
+        <div className="fixed inset-0 opacity-10 pointer-events-none z-0" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}></div>
         <div className="bg-gray-900/90 backdrop-blur p-8 rounded-xl w-full max-w-md border border-gray-800 z-10 shadow-2xl">
           <h1 className="text-4xl font-sports text-red-500 mb-6 text-center">Quiniela Mundial 2026</h1>
           {view === 'LOGIN' ? (
@@ -149,23 +185,31 @@ export default function QuinielaApp() {
     ? partidos.filter(match => match.date.includes(fechaHoyStr))
     : partidos.filter(match => getGrupoPorId(match.id) === grupoActivo);
 
-  const partidosPendientes = partidos.filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario));
+  // Filtro y ordenamiento cronológico para la pestaña de VOTAR
+  const partidosPendientes = partidos
+    .filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario))
+    .sort((a, b) => {
+      const dayA = parseInt(a.date.split(' ')[0]) || 0;
+      const dayB = parseInt(b.date.split(' ')[0]) || 0;
+      if (dayA !== dayB) return dayA - dayB;
+      const timeA = a.date.split('|')[1]?.trim() || "00:00";
+      const timeB = b.date.split('|')[1]?.trim() || "00:00";
+      return timeA.localeCompare(timeB);
+    });
+
+  const tablaMundial = calcularTablaMundial();
 
   return (
     <div className="min-h-screen bg-black text-white relative">
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
-      
-      {/* FONDO PANORÁMICO GLOBAL FIJO */}
       <div className="fixed inset-0 opacity-10 pointer-events-none z-0" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}></div>
 
-      {/* HEADER CON CONTROL DE AUDIO COMPACTO SIN DESLIZANTE */}
       <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center relative z-10">
         <div>
           <h1 className="text-2xl font-sports text-red-500">Quiniela Mundial 2026</h1>
           <p className="text-[10px] text-gray-500 font-semibold tracking-wider uppercase">Analista: {currentUser?.nombre} {currentUser?.apellido}</p>
         </div>
         
-        {/* REPRODUCTOR COMPACTO */}
         <div className="bg-gray-800 px-4 py-2 rounded-lg border border-gray-700 flex items-center shadow-lg">
           <audio ref={audioRef} src="/cancion_oficial.mp3" />
           <button 
@@ -183,18 +227,20 @@ export default function QuinielaApp() {
         </div>
       </header>
 
-      {/* PESTAÑAS HORIZONTALES */}
+      {/* PESTAÑAS HORIZONTALES ORDENADAS */}
       <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
         {[
+          { id: 'PRINCIPAL', label: 'Principal' },
           { id: 'CALENDARIO', label: 'Calendario' }, 
+          { id: 'RESULTADOS', label: 'Resultados' }, 
+          { id: 'POSICIONES_MUNDIAL', label: 'Tabla de Posiciones' },
           { id: 'VOTAR', label: 'Votar' }, 
           { id: 'MIS_VOTOS', label: 'Mi Vestuario' }, 
-          { id: 'RESULTADOS', label: 'Resultados' }, 
-          { id: 'TABLA', label: 'Posiciones' }
+          { id: 'RANKING_QUINIELA', label: 'Ranking Quiniela' }
         ].map(tab => (
           <button 
             key={tab.id} onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-none min-w-[110px] md:flex-1 py-4 text-xs font-bold uppercase tracking-wider transition ${activeTab === tab.id ? 'text-red-500 border-b-2 border-red-500 bg-red-900/10' : 'text-gray-500 hover:text-gray-300'}`}
+            className={`flex-none min-w-[120px] md:flex-1 py-4 text-[10px] md:text-xs font-bold uppercase tracking-wider transition ${activeTab === tab.id ? 'text-red-500 border-b-2 border-red-500 bg-red-900/10' : 'text-gray-500 hover:text-gray-300'}`}
           >
             {tab.label}
           </button>
@@ -203,7 +249,23 @@ export default function QuinielaApp() {
 
       <main className="p-4 md:p-6 max-w-6xl mx-auto relative z-10">
         
-        {/* PESTAÑA 1: CALENDARIO OFICIAL */}
+        {/* PESTAÑA: PRINCIPAL */}
+        {activeTab === 'PRINCIPAL' && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+            <h1 className="text-5xl md:text-7xl font-sports text-red-500 mb-2 tracking-widest drop-shadow-2xl">
+              Quiniela Mundial de Futbol 2026
+            </h1>
+            <h2 className="text-xl md:text-3xl font-sports text-white mb-10 tracking-widest text-shadow-sm">
+              Mundial México – Canadá – USA 2026
+            </h2>
+            <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800 shadow-2xl backdrop-blur-sm">
+              {/* Requiere que guardes la imagen como mascotas.png en la carpeta public */}
+              <img src="/mascotas.png" alt="Mascotas del Mundial 2026" className="w-64 md:w-80 h-auto object-contain drop-shadow-lg" onError={(e) => e.currentTarget.style.display = 'none'} />
+            </div>
+          </div>
+        )}
+
+        {/* PESTAÑA: CALENDARIO OFICIAL */}
         {activeTab === 'CALENDARIO' && (
           <div className="flex flex-col md:flex-row gap-6">
             <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
@@ -225,24 +287,108 @@ export default function QuinielaApp() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {partidosFiltrados.map((match) => (
-                  <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg transition-transform hover:scale-[1.02]">
-                    <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_local}</span></div>
-                    <div className="w-1/5 flex flex-col items-center">
-                      <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
-                      <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
-                        {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
-                      </span>
+                {partidosFiltrados.map((match) => {
+                  const yaVotado = votes.some(v => v.partido_id === match.id && v.usuario === currentUser?.usuario);
+                  return (
+                    <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg transition-transform hover:scale-[1.02] relative">
+                      <div className="w-[35%] text-center"><span className="font-sports text-lg tracking-wider block truncate">{FLAGS[match.equipo_local] || '🌎'} {match.equipo_local}</span></div>
+                      <div className="w-[30%] flex flex-col items-center">
+                        <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
+                        <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
+                          {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
+                        </span>
+                        {/* BOTÓN PRE-SELECCIÓN DE PREDICCIÓN */}
+                        {match.status === 'PENDING' && !yaVotado && (
+                          <button 
+                            onClick={() => { setSelectedMatchId(match.id.toString()); setActiveTab('VOTAR'); }}
+                            className="mt-2 bg-red-900/40 hover:bg-red-600 text-red-300 hover:text-white border border-red-800/50 text-[9px] uppercase font-bold py-1 px-3 rounded-full transition-all"
+                          >
+                            Hacer Predicción
+                          </button>
+                        )}
+                      </div>
+                      <div className="w-[35%] text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_visitante} {FLAGS[match.equipo_visitante] || '🌎'}</span></div>
                     </div>
-                    <div className="w-2/5 text-center"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_visitante}</span></div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
 
-        {/* PESTAÑA 2: VOTAR */}
+        {/* PESTAÑA: RESULTADOS */}
+        {activeTab === 'RESULTADOS' && (
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             {partidos.filter(p => p.status === 'FINISHED').map(p => (
+               <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
+                 <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{FLAGS[p.equipo_local]} {p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante} {FLAGS[p.equipo_visitante]}</p></div>
+                 <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
+                   <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
+                   <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                 </div>
+               </div>
+             ))}
+             {partidos.filter(p => p.status === 'FINISHED').length === 0 && <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium">Esperando el pitazo inicial de la FIFA...</p>}
+           </div>
+        )}
+
+        {/* PESTAÑA: TABLA DE POSICIONES (MUNDIAL) */}
+        {activeTab === 'POSICIONES_MUNDIAL' && (
+          <div className="space-y-8">
+            <div className="bg-gray-900/80 p-4 rounded-xl border border-gray-800 flex justify-between items-center text-xs text-gray-400 uppercase font-bold tracking-widest">
+              <span>FIFA World Cup Standings 2026</span>
+              <span>Pts = Puntos | GF = Goles a Favor | DG = Diferencia</span>
+            </div>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {['A','B','C','D','E','F','G','H','I','J','K','L'].map(grupo => {
+                const equiposGrupo = tablaMundial.filter(e => e.grupo === grupo);
+                if (equiposGrupo.length === 0) return null;
+                return (
+                  <div key={grupo} className="bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+                    <div className="bg-red-900/20 p-3 border-b border-red-900/50">
+                      <h3 className="font-sports text-xl text-red-500 tracking-widest">GRUPO {grupo}</h3>
+                    </div>
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-black text-gray-500 font-bold uppercase">
+                        <tr>
+                          <th className="p-3 w-8 text-center">#</th>
+                          <th className="p-3">Selección</th>
+                          <th className="p-3 text-center">PJ</th>
+                          <th className="p-3 text-center">PG</th>
+                          <th className="p-3 text-center">PE</th>
+                          <th className="p-3 text-center">PP</th>
+                          <th className="p-3 text-center">GF</th>
+                          <th className="p-3 text-center">GC</th>
+                          <th className="p-3 text-center">DG</th>
+                          <th className="p-3 text-center font-extrabold text-white bg-gray-800/50">PTS</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800/50">
+                        {equiposGrupo.map((eq, idx) => (
+                          <tr key={eq.equipo} className="hover:bg-gray-800/30 transition-colors">
+                            <td className={`p-3 text-center font-bold ${idx < 2 ? 'text-green-500' : 'text-gray-500'}`}>{idx + 1}</td>
+                            <td className="p-3 font-bold text-white tracking-wide truncate max-w-[100px]">{FLAGS[eq.equipo] || '🌎'} {eq.equipo}</td>
+                            <td className="p-3 text-center text-gray-400">{eq.PJ}</td>
+                            <td className="p-3 text-center text-gray-400">{eq.PG}</td>
+                            <td className="p-3 text-center text-gray-400">{eq.PE}</td>
+                            <td className="p-3 text-center text-gray-400">{eq.PP}</td>
+                            <td className="p-3 text-center text-gray-400">{eq.GF}</td>
+                            <td className="p-3 text-center text-gray-400">{eq.GC}</td>
+                            <td className="p-3 text-center font-mono">{eq.DG > 0 ? `+${eq.DG}` : eq.DG}</td>
+                            <td className="p-3 text-center font-sports text-xl text-amber-500 bg-gray-800/30">{eq.PTS}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* PESTAÑA: VOTAR */}
         {activeTab === 'VOTAR' && (
            <div className="bg-gray-900/90 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto shadow-2xl">
              <h2 className="text-xl font-sports text-red-500 mb-4 uppercase border-b border-gray-800 pb-2">Hacer Predicción</h2>
@@ -253,12 +399,12 @@ export default function QuinielaApp() {
              {selectedMatchId && (
                <div className="flex justify-between items-center mb-6 bg-black p-6 rounded-xl border border-gray-800">
                  <div className="text-center w-1/3">
-                   <p className="font-sports text-lg mb-2 text-gray-300">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local}</p>
+                   <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local}</p>
                    <input type="number" min="0" value={golesA} onChange={e => setGolesA(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
                  </div>
                  <span className="font-sports text-xl text-red-500">VS</span>
                  <div className="text-center w-1/3">
-                   <p className="font-sports text-lg mb-2 text-gray-300">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante}</p>
+                   <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante}</p>
                    <input type="number" min="0" value={golesB} onChange={e => setGolesB(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
                  </div>
                </div>
@@ -268,7 +414,7 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA 3: MI VESTUARIO */}
+        {/* PESTAÑA: MI VESTUARIO */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
@@ -296,7 +442,7 @@ export default function QuinielaApp() {
                  <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center shadow-lg transition-all ${estiloCard}`}>
                    <div>
                      <p className="text-[10px] text-gray-500 font-mono mb-0.5">{p?.date}</p>
-                     <p className="font-sports text-xl text-white tracking-wider">{p?.equipo_local} <span className="text-gray-600 text-xs font-sans normal-case mx-1">vs</span> {p?.equipo_visitante}</p>
+                     <p className="font-sports text-xl text-white tracking-wider">{FLAGS[p?.equipo_local]} {p?.equipo_local} <span className="text-gray-600 text-xs font-sans normal-case mx-1">vs</span> {p?.equipo_visitante} {FLAGS[p?.equipo_visitante]}</p>
                      {p?.status === 'FINISHED' && (
                        <span className={`text-[10px] font-bold uppercase tracking-widest block mt-2 ${colorTextoPuntos}`}>
                          {puntosGanados > 0 ? `+${puntosGanados} Puntos Obtenidos` : '0 Puntos (Fallo)'}
@@ -313,24 +459,8 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA 4: RESULTADOS */}
-        {activeTab === 'RESULTADOS' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             {partidos.filter(p => p.status === 'FINISHED').map(p => (
-               <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
-                 <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante}</p></div>
-                 <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
-                   <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
-                   <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
-                 </div>
-               </div>
-             ))}
-             {partidos.filter(p => p.status === 'FINISHED').length === 0 && <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium">Esperando el pitazo inicial de la FIFA...</p>}
-           </div>
-        )}
-
-        {/* PESTAÑA 5: TABLA DE POSICIONES CON REGLAMENTO */}
-        {activeTab === 'TABLA' && (
+        {/* PESTAÑA: RANKING QUINIELA */}
+        {activeTab === 'RANKING_QUINIELA' && (
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
               <div className="bg-black p-4 flex justify-between border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
@@ -338,7 +468,7 @@ export default function QuinielaApp() {
                 <span className="flex-1 pl-2">Analista</span>
                 <span className="w-20 text-center">Score</span>
               </div>
-              {calcularPuntos().map((user, idx) => (
+              {calcularRankingQuiniela().map((user, idx) => (
                 <div key={user.usuario} className={`p-4 flex justify-between items-center border-b border-gray-800/40 ${user.usuario === currentUser.usuario ? 'bg-red-900/10' : 'hover:bg-gray-800/50'}`}>
                   <span className={`w-12 text-center font-sports text-2xl ${idx === 0 ? 'text-red-500' : 'text-gray-500'}`}>{idx + 1}°</span>
                   <span className="flex-1 font-bold text-sm uppercase tracking-wider pl-2">
@@ -351,7 +481,7 @@ export default function QuinielaApp() {
             </div>
 
             <div className="w-full lg:w-72 bg-gray-900/90 p-6 rounded-xl border border-gray-800 h-fit shadow-2xl">
-              <h3 className="text-red-500 font-sports text-2xl tracking-widest border-b border-gray-800 pb-2 mb-4">Reglamento</h3>
+              <h3 className="text-red-500 font-sports text-2xl tracking-widest border-b border-gray-800 pb-2 mb-4">Reglas de Quiniela</h3>
               <ul className="space-y-4 text-xs text-gray-400 font-medium">
                 <li className="flex items-start gap-2.5">
                   <span className="text-green-500 font-sports text-2xl leading-none">+3</span>

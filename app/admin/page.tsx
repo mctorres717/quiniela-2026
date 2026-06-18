@@ -63,7 +63,7 @@ export default function ActualizadorResultados() {
 
   const handleLoginAdmin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === 'master2026') {
+    if (pin === '0714') {
       setIsAdmin(true);
     } else {
       alert('PIN administrativo incorrecto.');

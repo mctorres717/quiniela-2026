@@ -1,0 +1,18 @@
+{
+  "name": "Quiniela Mundial 2026",
+  "short_name": "Quiniela2026",
+  "description": "Aplicación Oficial para la Quiniela del Mundial de Fútbol 2026",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#dc2626",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/mascotas.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

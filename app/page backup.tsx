@@ -379,9 +379,20 @@ export default function QuinielaApp() {
           </div>
         )}
 
+        {/* PESTAÑA RESULTADOS ORDENADA POR FECHA (MÁS RECIENTES AL FINAL) */}
         {activeTab === 'RESULTADOS' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {partidos.filter(p => p.status === 'FINISHED').map(p => (
+              {partidos
+                .filter(p => p.status === 'FINISHED')
+                .sort((a, b) => {
+                  const dayA = parseInt(a.date.split(' ')[0]) || 0;
+                  const dayB = parseInt(b.date.split(' ')[0]) || 0;
+                  if (dayA !== dayB) return dayA - dayB;
+                  const timeA = a.date.split('|')[1]?.trim() || "00:00";
+                  const timeB = b.date.split('|')[1]?.trim() || "00:00";
+                  return timeA.localeCompare(timeB);
+                })
+                .map(p => (
                 <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
                   <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{FLAGS[p.equipo_local]} {p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante} {FLAGS[p.equipo_visitante]}</p></div>
                   <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
@@ -474,8 +485,9 @@ export default function QuinielaApp() {
            </div>
         )}
 
+        {/* PESTAÑA MI VESTUARIO CON RESULTADOS OFICIALES Y TIMESTAMP */}
         {activeTab === 'MIS_VOTOS' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
                const p = partidos.find(pa => pa.id === voto.partido_id);
                
@@ -497,10 +509,16 @@ export default function QuinielaApp() {
                  }
                }
 
+               // Formateador de Fecha de Voto
+               const fechaVotoFormat = voto.created_at 
+                ? new Date(voto.created_at).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
+                : 'Fecha no registrada';
+
                return (
-                 <div key={idx} className={`p-4 rounded-xl border flex justify-between items-center shadow-lg transition-all ${estiloCard}`}>
-                   <div>
-                     <p className="text-[10px] text-gray-500 font-mono mb-0.5">{p?.date}</p>
+                 <div key={idx} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center shadow-lg transition-all gap-4 ${estiloCard}`}>
+                   <div className="w-full md:w-auto">
+                     <p className="text-[10px] text-gray-400 font-mono mb-0.5">🗓️ Partido: {p?.date}</p>
+                     <p className="text-[10px] text-blue-400 font-mono mb-2">⏱️ Votado el: {fechaVotoFormat}</p>
                      <p className="font-sports text-xl text-white tracking-wider">{FLAGS[p?.equipo_local]} {p?.equipo_local} <span className="text-gray-600 text-xs font-sans normal-case mx-1">vs</span> {p?.equipo_visitante} {FLAGS[p?.equipo_visitante]}</p>
                      {p?.status === 'FINISHED' && (
                        <span className={`text-[10px] font-bold uppercase tracking-widest block mt-2 ${colorTextoPuntos}`}>
@@ -508,9 +526,19 @@ export default function QuinielaApp() {
                        </span>
                      )}
                    </div>
-                   <div className="bg-black px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[80px]">
-                     <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Tu Voto</p>
-                     <p className="text-2xl font-sports text-red-500 tracking-widest">{voto.goles_local}-{voto.goles_visitante}</p>
+                   
+                   <div className="flex gap-2 w-full md:w-auto justify-end">
+                     <div className="bg-black px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[80px]">
+                       <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Tu Voto</p>
+                       <p className="text-2xl font-sports text-red-500 tracking-widest">{voto.goles_local}-{voto.goles_visitante}</p>
+                     </div>
+                     
+                     {p?.status === 'FINISHED' && (
+                       <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[80px]">
+                         <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
+                         <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local}-{p.goles_visitante}</p>
+                       </div>
+                     )}
                    </div>
                  </div>
                )

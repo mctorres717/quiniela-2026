@@ -14,7 +14,6 @@ const getGrupoPorId = (id: number) => {
   return groups[Math.floor((id - 1) / 6)];
 };
 
-// DICCIONARIO NATIVO DE BANDERAS
 const FLAGS: Record<string, string> = {
   "México": "🇲🇽", "Sudáfrica": "🇿🇦", "Corea del Sur": "🇰🇷", "República Checa": "🇨🇿",
   "Canadá": "🇨🇦", "Bosnia y Herzegovina": "🇧🇦", "Catar": "🇶🇦", "Suiza": "🇨🇭",
@@ -32,11 +31,9 @@ const FLAGS: Record<string, string> = {
 
 export default function QuinielaApp() {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'DASHBOARD'>('LOGIN');
-  // ORDEN DE PESTAÑAS ACTUALIZADO E INICIO EN PRINCIPAL
   const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA'>('PRINCIPAL');
   const [currentUser, setCurrentUser] = useState<any>(null);
   
-  // Datos Dinámicos
   const [users, setUsers] = useState<any[]>([]);
   const [votes, setVotes] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
@@ -44,7 +41,6 @@ export default function QuinielaApp() {
   const [fechaHoyStr, setFechaHoyStr] = useState('');
   const [grupoActivo, setGrupoActivo] = useState('HOY');
 
-  // Formularios
   const [form, setForm] = useState({ nombre: '', apellido: '', usuario: '', pin: '' });
   const [loginForm, setLoginForm] = useState({ usuario: '', pin: '' });
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -53,6 +49,72 @@ export default function QuinielaApp() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // LÓGICA DE AUTO-LOGOUT Y BORRADO DE SESIÓN
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setView('LOGIN');
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('currentView');
+    }
+  };
+
+  // INYECTOR AUTOMÁTICO DE PWA Y RECUPERADOR DE SESIÓN (PERSISTENCIA AL REFRESCAR)
+  useEffect(() => {
+    // 1. Verificar si hay sesión activa guardada previamente
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('currentUser');
+      const savedView = localStorage.getItem('currentView');
+      if (savedUser && savedView === 'DASHBOARD') {
+        setCurrentUser(JSON.parse(savedUser));
+        setView('DASHBOARD');
+      }
+
+      // 2. Inyectar tags de manifiesto PWA dinámicamente en el Head de la página
+      if (!document.querySelector('link[rel="manifest"]')) {
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = '/manifest.json';
+        document.head.appendChild(link);
+      }
+
+      // 3. Registrar el Service Worker en producción móvil
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then((reg) => {
+            console.log('PWA Service Worker en marcha en:', reg.scope);
+          });
+        });
+      }
+    }
+  }, []);
+
+  // VIGILANTE DE INACTIVIDAD DE 5 MINUTOS (300,000 ms)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let inactivityTimeout: NodeJS.Timeout;
+
+    const resetInactivityTimer = () => {
+      clearTimeout(inactivityTimeout);
+      inactivityTimeout = setTimeout(() => {
+        alert('Tu sesión ha expirado por inactividad de 5 minutos.');
+        handleLogout();
+      }, 5 * 60 * 1000); // 5 minutos exactos
+    };
+
+    // Monitorear interacciones del usuario en tiempo real
+    const userEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    userEvents.forEach(event => window.addEventListener(event, resetInactivityTimer));
+
+    resetInactivityTimer(); // Arrancar el primer conteo
+
+    return () => {
+      clearTimeout(inactivityTimeout);
+      userEvents.forEach(event => window.removeEventListener(event, resetInactivityTimer));
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     const fetchSupabaseData = async () => {
@@ -95,7 +157,14 @@ export default function QuinielaApp() {
 
   const handleLogin = () => {
     const user = users.find(u => u.usuario === loginForm.usuario && u.pin === loginForm.pin);
-    if (user) { setCurrentUser(user); setView('DASHBOARD'); }
+    if (user) {
+      setCurrentUser(user);
+      setView('DASHBOARD');
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        localStorage.setItem('currentView', 'DASHBOARD');
+      }
+    }
     else alert('Usuario o PIN incorrecto.');
   };
 
@@ -107,7 +176,6 @@ export default function QuinielaApp() {
     else { alert('¡Predicción guardada!'); setGolesA(''); setGolesB(''); setSelectedMatchId(''); setVotes([...votes, newVote]); }
   };
 
-  // MOTOR MATEMÁTICO: TABLA DEL MUNDIAL (FIFA RULES)
   const calcularTablaMundial = () => {
     const stats: Record<string, any> = {};
     partidos.forEach(p => {
@@ -133,8 +201,8 @@ export default function QuinielaApp() {
 
     return Object.values(stats).map(s => ({ ...s, DG: s.GF - s.GC })).sort((a, b) => {
       if (b.PTS !== a.PTS) return b.PTS - a.PTS;
-      if (b.DG !== a.DG) return b.DG - a.DG; // Criterio 2: Diferencia de Goles
-      return b.GF - a.GF; // Criterio 3: Goles a Favor
+      if (b.DG !== a.DG) return b.DG - a.DG;
+      return b.GF - a.GF;
     });
   };
 
@@ -185,7 +253,6 @@ export default function QuinielaApp() {
     ? partidos.filter(match => match.date.includes(fechaHoyStr))
     : partidos.filter(match => getGrupoPorId(match.id) === grupoActivo);
 
-  // Filtro y ordenamiento cronológico para la pestaña de VOTAR
   const partidosPendientes = partidos
     .filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario))
     .sort((a, b) => {
@@ -223,11 +290,11 @@ export default function QuinielaApp() {
             {isPlaying ? '⏸ Pausar' : '▶ Play'}
           </button>
           <div className="h-4 w-px bg-gray-700 mx-3"></div>
-          <button onClick={() => setView('LOGIN')} className="text-[10px] text-gray-400 hover:text-white font-bold uppercase tracking-widest">SALIR</button>
+          {/* SE VINCULÓ EL BOTÓN AL MOTOR SEGURO DE LOGOUT */}
+          <button onClick={handleLogout} className="text-[10px] text-gray-400 hover:text-white font-bold uppercase tracking-widest">SALIR</button>
         </div>
       </header>
 
-      {/* PESTAÑAS HORIZONTALES ORDENADAS */}
       <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
         {[
           { id: 'PRINCIPAL', label: 'Principal' },
@@ -249,7 +316,6 @@ export default function QuinielaApp() {
 
       <main className="p-4 md:p-6 max-w-6xl mx-auto relative z-10">
         
-        {/* PESTAÑA: PRINCIPAL */}
         {activeTab === 'PRINCIPAL' && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
             <h1 className="text-5xl md:text-7xl font-sports text-red-500 mb-2 tracking-widest drop-shadow-2xl">
@@ -259,13 +325,11 @@ export default function QuinielaApp() {
               Mundial México – Canadá – USA 2026
             </h2>
             <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800 shadow-2xl backdrop-blur-sm">
-              {/* Requiere que guardes la imagen como mascotas.png en la carpeta public */}
               <img src="/mascotas.png" alt="Mascotas del Mundial 2026" className="w-64 md:w-80 h-auto object-contain drop-shadow-lg" onError={(e) => e.currentTarget.style.display = 'none'} />
             </div>
           </div>
         )}
 
-        {/* PESTAÑA: CALENDARIO OFICIAL */}
         {activeTab === 'CALENDARIO' && (
           <div className="flex flex-col md:flex-row gap-6">
             <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
@@ -297,7 +361,6 @@ export default function QuinielaApp() {
                         <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
                           {match.status === 'FINISHED' ? `${match.goles_local} - ${match.goles_visitante}` : 'VS'}
                         </span>
-                        {/* BOTÓN PRE-SELECCIÓN DE PREDICCIÓN */}
                         {match.status === 'PENDING' && !yaVotado && (
                           <button 
                             onClick={() => { setSelectedMatchId(match.id.toString()); setActiveTab('VOTAR'); }}
@@ -316,23 +379,21 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* PESTAÑA: RESULTADOS */}
         {activeTab === 'RESULTADOS' && (
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             {partidos.filter(p => p.status === 'FINISHED').map(p => (
-               <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
-                 <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{FLAGS[p.equipo_local]} {p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante} {FLAGS[p.equipo_visitante]}</p></div>
-                 <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
-                   <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
-                   <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
-                 </div>
-               </div>
-             ))}
-             {partidos.filter(p => p.status === 'FINISHED').length === 0 && <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium">Esperando el pitazo inicial de la FIFA...</p>}
-           </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {partidos.filter(p => p.status === 'FINISHED').map(p => (
+                <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
+                  <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{FLAGS[p.equipo_local]} {p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante} {FLAGS[p.equipo_visitante]}</p></div>
+                  <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
+                    <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
+                    <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                  </div>
+                </div>
+              ))}
+              {partidos.filter(p => p.status === 'FINISHED').length === 0 && <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium">Esperando el pitazo inicial de la FIFA...</p>}
+            </div>
         )}
 
-        {/* PESTAÑA: TABLA DE POSICIONES (MUNDIAL) */}
         {activeTab === 'POSICIONES_MUNDIAL' && (
           <div className="space-y-8">
             <div className="bg-gray-900/80 p-4 rounded-xl border border-gray-800 flex justify-between items-center text-xs text-gray-400 uppercase font-bold tracking-widest">
@@ -360,7 +421,7 @@ export default function QuinielaApp() {
                           <th className="p-3 text-center">PP</th>
                           <th className="p-3 text-center">GF</th>
                           <th className="p-3 text-center">GC</th>
-                          <th className="p-3 text-center">DG</th>
+                          <th className="p-3 text-center font-mono">DG</th>
                           <th className="p-3 text-center font-extrabold text-white bg-gray-800/50">PTS</th>
                         </tr>
                       </thead>
@@ -388,7 +449,6 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* PESTAÑA: VOTAR */}
         {activeTab === 'VOTAR' && (
            <div className="bg-gray-900/90 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto shadow-2xl">
              <h2 className="text-xl font-sports text-red-500 mb-4 uppercase border-b border-gray-800 pb-2">Hacer Predicción</h2>
@@ -414,7 +474,6 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA: MI VESTUARIO */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
@@ -459,7 +518,6 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA: RANKING QUINIELA */}
         {activeTab === 'RANKING_QUINIELA' && (
           <div className="flex flex-col lg:flex-row gap-6">
             <div className="flex-1 bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">

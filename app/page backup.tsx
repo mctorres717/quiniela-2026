@@ -60,9 +60,8 @@ export default function QuinielaApp() {
     }
   };
 
-  // INYECTOR AUTOMÁTICO DE PWA Y RECUPERADOR DE SESIÓN (PERSISTENCIA AL REFRESCAR)
+  // INYECTOR AUTOMÁTICO DE PWA Y RECUPERADOR DE SESIÓN
   useEffect(() => {
-    // 1. Verificar si hay sesión activa guardada previamente
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('currentUser');
       const savedView = localStorage.getItem('currentView');
@@ -71,7 +70,6 @@ export default function QuinielaApp() {
         setView('DASHBOARD');
       }
 
-      // 2. Inyectar tags de manifiesto PWA dinámicamente en el Head de la página
       if (!document.querySelector('link[rel="manifest"]')) {
         const link = document.createElement('link');
         link.rel = 'manifest';
@@ -79,7 +77,6 @@ export default function QuinielaApp() {
         document.head.appendChild(link);
       }
 
-      // 3. Registrar el Service Worker en producción móvil
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js').then((reg) => {
@@ -90,7 +87,7 @@ export default function QuinielaApp() {
     }
   }, []);
 
-  // VIGILANTE DE INACTIVIDAD DE 5 MINUTOS (300,000 ms)
+  // VIGILANTE DE INACTIVIDAD DE 5 MINUTOS
   useEffect(() => {
     if (!currentUser) return;
 
@@ -101,14 +98,13 @@ export default function QuinielaApp() {
       inactivityTimeout = setTimeout(() => {
         alert('Tu sesión ha expirado por inactividad de 5 minutos.');
         handleLogout();
-      }, 5 * 60 * 1000); // 5 minutos exactos
+      }, 5 * 60 * 1000);
     };
 
-    // Monitorear interacciones del usuario en tiempo real
     const userEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
     userEvents.forEach(event => window.addEventListener(event, resetInactivityTimer));
 
-    resetInactivityTimer(); // Arrancar el primer conteo
+    resetInactivityTimer();
 
     return () => {
       clearTimeout(inactivityTimeout);
@@ -168,12 +164,31 @@ export default function QuinielaApp() {
     else alert('Usuario o PIN incorrecto.');
   };
 
+  // --- MOTOR DE VOTOS OPTIMIZADO (INYECCIÓN DE TIMESTAMP) ---
   const handleVote = async () => {
     if (!selectedMatchId || golesA === '' || golesB === '') return alert('Completa los campos');
-    const newVote = { usuario: currentUser.usuario, partido_id: Number(selectedMatchId), goles_local: Number(golesA), goles_visitante: Number(golesB) };
-    const { error } = await supabase.from('votos').insert([newVote]);
+    
+    const newVote = { 
+      usuario: currentUser.usuario, 
+      partido_id: Number(selectedMatchId), 
+      goles_local: Number(golesA), 
+      goles_visitante: Number(golesB) 
+    };
+
+    // Usamos .select() para que la base de datos nos devuelva el registro con la fecha oficial de creación
+    const { data, error } = await supabase.from('votos').insert([newVote]).select();
+    
     if (error) alert(`Error: ${error.message}`);
-    else { alert('¡Predicción guardada!'); setGolesA(''); setGolesB(''); setSelectedMatchId(''); setVotes([...votes, newVote]); }
+    else { 
+      alert('¡Predicción guardada!'); 
+      setGolesA(''); 
+      setGolesB(''); 
+      setSelectedMatchId(''); 
+      
+      // Tomamos la respuesta oficial del servidor. Si por latencia falla, generamos una fecha local como respaldo.
+      const votoConfirmado = data && data.length > 0 ? data[0] : { ...newVote, created_at: new Date().toISOString() };
+      setVotes([...votes, votoConfirmado]); 
+    }
   };
 
   const calcularTablaMundial = () => {
@@ -290,7 +305,6 @@ export default function QuinielaApp() {
             {isPlaying ? '⏸ Pausar' : '▶ Play'}
           </button>
           <div className="h-4 w-px bg-gray-700 mx-3"></div>
-          {/* SE VINCULÓ EL BOTÓN AL MOTOR SEGURO DE LOGOUT */}
           <button onClick={handleLogout} className="text-[10px] text-gray-400 hover:text-white font-bold uppercase tracking-widest">SALIR</button>
         </div>
       </header>
@@ -379,7 +393,6 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* PESTAÑA RESULTADOS ORDENADA POR FECHA (MÁS RECIENTES AL FINAL) */}
         {activeTab === 'RESULTADOS' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {partidos
@@ -485,7 +498,7 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA MI VESTUARIO CON RESULTADOS OFICIALES Y TIMESTAMP */}
+        {/* PESTAÑA MI VESTUARIO */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
@@ -509,7 +522,7 @@ export default function QuinielaApp() {
                  }
                }
 
-               // Formateador de Fecha de Voto
+               // Formateador de Fecha de Voto con la localización para la visualización correcta
                const fechaVotoFormat = voto.created_at 
                 ? new Date(voto.created_at).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
                 : 'Fecha no registrada';

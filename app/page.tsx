@@ -164,29 +164,36 @@ export default function QuinielaApp() {
     else alert('Usuario o PIN incorrecto.');
   };
 
-  // --- MOTOR DE VOTOS OPTIMIZADO (INYECCIÓN DE TIMESTAMP) ---
+  // --- MOTOR DE VOTOS TOTALMENTE CORREGIDO Y BLINDADO ---
   const handleVote = async () => {
     if (!selectedMatchId || golesA === '' || golesB === '') return alert('Completa los campos');
     
+    const partidoIdNum = Number(selectedMatchId);
+    const timestampActual = new Date().toISOString();
+
     const newVote = { 
       usuario: currentUser.usuario, 
-      partido_id: Number(selectedMatchId), 
+      partido_id: partidoIdNum, 
       goles_local: Number(golesA), 
       goles_visitante: Number(golesB) 
     };
 
-    // Usamos .select() para que la base de datos nos devuelva el registro con la fecha oficial de creación
     const { data, error } = await supabase.from('votos').insert([newVote]).select();
     
     if (error) alert(`Error: ${error.message}`);
     else { 
       alert('¡Predicción guardada!'); 
+      
+      // RESPALDO ARQUITECTÓNICO: Guardamos la estampa de tiempo localmente indexada por usuario y partido
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`vote_time_${currentUser.usuario}_${partidoIdNum}`, timestampActual);
+      }
+
       setGolesA(''); 
       setGolesB(''); 
       setSelectedMatchId(''); 
       
-      // Tomamos la respuesta oficial del servidor. Si por latencia falla, generamos una fecha local como respaldo.
-      const votoConfirmado = data && data.length > 0 ? data[0] : { ...newVote, created_at: new Date().toISOString() };
+      const votoConfirmado = data && data.length > 0 ? data[0] : { ...newVote, created_at: timestampActual };
       setVotes([...votes, votoConfirmado]); 
     }
   };
@@ -498,7 +505,7 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA MI VESTUARIO */}
+        {/* PESTAÑA MI VESTUARIO - RESPALDADA CON LOCALSTORAGE COMPATIBLE */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
@@ -522,9 +529,11 @@ export default function QuinielaApp() {
                  }
                }
 
-               // Formateador de Fecha de Voto con la localización para la visualización correcta
-               const fechaVotoFormat = voto.created_at 
-                ? new Date(voto.created_at).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
+               // DOBLE REVISIÓN: Lee desde Supabase o desde el almacenamiento local persistido en handleVote
+               const fechaVotoRaw = voto.created_at || (typeof window !== 'undefined' ? localStorage.getItem(`vote_time_${voto.usuario}_${voto.partido_id}`) : null);
+
+               const fechaVotoFormat = fechaVotoRaw 
+                ? new Date(fechaVotoRaw).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
                 : 'Fecha no registrada';
 
                return (

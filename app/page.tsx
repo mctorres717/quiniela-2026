@@ -39,6 +39,16 @@ const FASES_TORNEO = [
   { id: 'FINAL', label: 'Final' }
 ];
 
+// Función Helper para ordenar fechas tipo "DD/MM/YYYY | HH:MM"
+const getFechaMilisegundos = (dateStr: string) => {
+  if (!dateStr) return 0;
+  const parts = dateStr.split(' | ');
+  if (parts.length !== 2) return 0;
+  const [day, month, year] = parts[0].split('/');
+  const [hour, minute] = parts[1].split(':');
+  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)).getTime();
+};
+
 export default function QuinielaApp() {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'DASHBOARD'>('LOGIN');
   const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA'>('PRINCIPAL');
@@ -47,10 +57,9 @@ export default function QuinielaApp() {
   const [users, setUsers] = useState<any[]>([]);
   const [votes, setVotes] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
-  const [fechasMundial, setFechasMundial] = useState<string[]>([]);
   
   // --- ESTADOS DE NAVEGACIÓN UNIFICADOS ---
-  const [fechaFiltro, setFechaFiltro] = useState('');
+  const [fechaFiltro, setFechaFiltro] = useState('TODAS');
   const [faseGlobal, setFaseGlobal] = useState('GRUPOS');
   const [faseRanking, setFaseRanking] = useState('TOTAL');
 
@@ -100,13 +109,6 @@ export default function QuinielaApp() {
       const { data: partidosData } = await supabase.from('partidos').select('*').order('id', { ascending: true });
       if (partidosData) {
         setPartidos(partidosData);
-        // Extraemos las fechas únicas ordenadas
-        const fechas = Array.from(new Set(partidosData.map((p: any) => p.date.split(" | ")[0]))).sort((a: any, b: any) => {
-          const partsA = a.split('/'); const partsB = b.split('/');
-          return new Date(`${partsA[2]}-${partsA[1]}-${partsA[0]}`).getTime() - new Date(`${partsB[2]}-${partsB[1]}-${partsB[0]}`).getTime();
-        }) as string[];
-        setFechasMundial(fechas);
-        if (fechas.length > 0 && !fechaFiltro) setFechaFiltro(fechas[0]);
       }
     };
 
@@ -118,8 +120,15 @@ export default function QuinielaApp() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [fechaFiltro]);
-
+  }, []);
+// --- CONTROLADORES DE EVENTOS DE TECLADO (ENTER) ---
+  const handleKeyDownLogin = (e: React.KeyboardEvent<HTMLInputElement>) => { 
+    if (e.key === 'Enter') handleLogin(); 
+  };
+  
+  const handleKeyDownRegister = (e: React.KeyboardEvent<HTMLInputElement>) => { 
+    if (e.key === 'Enter') handleRegister(); 
+  };
   const handleRegister = async () => {
     if (!form.nombre || !form.apellido || !form.usuario || form.pin.length !== 4) return alert('Llena todos los campos');
     const { error } = await supabase.from('usuarios').insert([form]);
@@ -177,7 +186,8 @@ export default function QuinielaApp() {
         } else if (p.goles_local < p.goles_visitante) {
           stats[p.equipo_visitante].PG += 1; stats[p.equipo_visitante].PTS += 3; stats[p.equipo_local].PP += 1;
         } else {
-          stats[p.equipo_local].PE += 1; stats[p.equipo_local].PTS += 1; stats[p.equipo_visitante].PE += 1; stats[p.equipo_visitante].PTS += 1;
+          stats[p.equipo_local].PE += 1; stats[p.equipo_local].PTS += 1;
+          stats[p.equipo_visitante].PE += 1; stats[p.equipo_visitante].PTS += 1;
         }
       }
     });
@@ -195,7 +205,6 @@ export default function QuinielaApp() {
       votes.filter(v => v.usuario === user.usuario).forEach(voto => {
         const p = partidos.find(pa => pa.id === voto.partido_id);
         if (p && p.status === 'FINISHED' && p.goles_local !== null) {
-          // Si pedimos TOTAL, sumamos todo. Si no, solo sumamos los puntos de esa fase.
           if (faseSolicitada === 'TOTAL' || (p.fase || 'GRUPOS') === faseSolicitada) {
             if (voto.goles_local === p.goles_local && voto.goles_visitante === p.goles_visitante) ptos += 3;
             else if ((voto.goles_local > voto.goles_visitante && p.goles_local > p.goles_visitante) || 
@@ -208,9 +217,25 @@ export default function QuinielaApp() {
     }).sort((a, b) => b.puntos - a.puntos);
   };
 
-  // --- UI COMPONENTS HELPER ---
+  // --- OBTENCIÓN DINÁMICA DE FECHAS SEGÚN LA FASE SELECCIONADA ---
+  const fechasPorFase = Array.from(new Set(
+    partidos
+      .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
+      .map((p: any) => p.date.split(" | ")[0])
+  )).sort((a: any, b: any) => {
+    const [dayA, monthA, yearA] = a.split('/');
+    const [dayB, monthB, yearB] = b.split('/');
+    return new Date(`${yearA}-${monthA}-${dayA}`).getTime() - new Date(`${yearB}-${monthB}-${dayB}`).getTime();
+  }) as string[];
+
+  // Efecto para resetear el filtro de fecha si cambiamos de fase
+  useEffect(() => {
+    setFechaFiltro('TODAS');
+  }, [faseGlobal]);
+
+  // --- UI COMPONENTS HELPER (Scroller 100% Full Width) ---
   const FasesScroller = ({ state, setState, extraOption }: any) => (
-    <div className="flex overflow-x-auto gap-2 pb-4 border-b border-gray-800 custom-scrollbar mb-6">
+    <div className="flex overflow-x-auto gap-2 pb-4 border-b border-gray-800 custom-scrollbar mb-6 w-full">
       {extraOption && (
         <button 
           onClick={() => setState(extraOption.id)}
@@ -239,17 +264,17 @@ export default function QuinielaApp() {
           <h1 className="text-4xl font-sports text-red-500 mb-6 text-center">Quiniela Mundial 2026</h1>
           {view === 'LOGIN' ? (
             <div className="space-y-4">
-              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setLoginForm({...loginForm, usuario: e.target.value})} />
-              <input type="password" placeholder="PIN" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onChange={e => setLoginForm({...loginForm, pin: e.target.value})} />
+              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownLogin} onChange={e => setLoginForm({...loginForm, usuario: e.target.value})} />
+              <input type="password" placeholder="PIN" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownLogin} onChange={e => setLoginForm({...loginForm, pin: e.target.value})} />
               <button onClick={handleLogin} className="w-full bg-red-600 font-bold py-3 rounded uppercase tracking-wider hover:bg-red-500 transition">Ingresar</button>
               <p className="text-center text-gray-400 mt-4 text-sm">¿No tienes cuenta? <span className="text-red-500 cursor-pointer font-bold" onClick={() => setView('REGISTER')}>Regístrate</span></p>
             </div>
           ) : (
             <div className="space-y-4">
-              <input type="text" placeholder="Nombre" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, nombre: e.target.value})} />
-              <input type="text" placeholder="Apellido" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, apellido: e.target.value})} />
-              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onChange={e => setForm({...form, usuario: e.target.value})} />
-              <input type="password" placeholder="PIN (4 dígitos)" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onChange={e => setForm({...form, pin: e.target.value})} />
+              <input type="text" placeholder="Nombre" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, nombre: e.target.value})} />
+              <input type="text" placeholder="Apellido" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, apellido: e.target.value})} />
+              <input type="text" placeholder="Usuario" className="w-full p-3 rounded bg-black border border-gray-700 text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, usuario: e.target.value})} />
+              <input type="password" placeholder="PIN (4 dígitos)" className="w-full p-3 rounded bg-black border border-gray-700 text-center tracking-widest text-white outline-none focus:border-red-500" onKeyDown={handleKeyDownRegister} onChange={e => setForm({...form, pin: e.target.value})} />
               <button onClick={handleRegister} className="w-full bg-red-600 text-white font-bold py-3 rounded uppercase tracking-wider hover:bg-red-500 transition">Registrarme</button>
               <p className="text-center text-gray-400 mt-4 text-sm">¿Ya tienes cuenta? <span className="text-red-500 cursor-pointer font-bold" onClick={() => setView('LOGIN')}>Inicia Sesión</span></p>
             </div>
@@ -262,7 +287,7 @@ export default function QuinielaApp() {
   const tablaMundial = calcularTablaMundial();
 
   return (
-    <div className="min-h-screen bg-black text-white relative">
+    <div className="min-h-screen bg-black text-white relative flex flex-col">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); 
         .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
@@ -272,7 +297,7 @@ export default function QuinielaApp() {
       `}</style>
       <div className="fixed inset-0 opacity-10 pointer-events-none z-0" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}></div>
 
-      <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center relative z-10">
+      <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center relative z-10 w-full">
         <div>
           <h1 className="text-2xl font-sports text-red-500">Quiniela Mundial 2026</h1>
           <p className="text-[10px] text-gray-500 font-semibold tracking-wider uppercase">Analista: {currentUser?.nombre} {currentUser?.apellido}</p>
@@ -287,7 +312,7 @@ export default function QuinielaApp() {
         </div>
       </header>
 
-      <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20 custom-scrollbar">
+      <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20 custom-scrollbar w-full">
         {[
           { id: 'PRINCIPAL', label: 'Principal' },
           { id: 'CALENDARIO', label: 'Calendario' }, 
@@ -306,7 +331,7 @@ export default function QuinielaApp() {
         ))}
       </div>
 
-      <main className="p-4 md:p-6 max-w-6xl mx-auto relative z-10">
+      <main className="p-4 md:p-6 w-full max-w-6xl mx-auto relative z-10 flex-1">
         
         {activeTab === 'PRINCIPAL' && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -320,27 +345,26 @@ export default function QuinielaApp() {
 
         {/* --- PESTAÑA CALENDARIO --- */}
         {activeTab === 'CALENDARIO' && (
-          <div>
+          <div className="w-full">
             <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
             
-            <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 mb-6 flex flex-col md:flex-row justify-between items-center gap-4 w-full">
               <h2 className="text-red-500 font-bold uppercase tracking-widest text-sm">Calendario Oficial - {faseGlobal.replace('_', ' ')}</h2>
               
-              {/* Filtro de Fecha secundario dentro de la fase */}
               <div className="flex items-center gap-2 w-full md:w-auto">
                 <span className="text-[10px] text-gray-500 uppercase font-bold">Buscar Fecha:</span>
                 <select value={fechaFiltro} onChange={(e) => setFechaFiltro(e.target.value)} className="bg-black text-white font-bold border border-gray-700 rounded p-2 text-sm outline-none w-full md:w-auto focus:border-red-500">
                   <option value="TODAS">Todas las fechas de la fase</option>
-                  {fechasMundial.map(f => <option key={f} value={f}>{f}</option>)}
+                  {fechasPorFase.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
               {partidos
                 .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
                 .filter(p => fechaFiltro === 'TODAS' || p.date.includes(fechaFiltro))
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .sort((a, b) => getFechaMilisegundos(a.date) - getFechaMilisegundos(b.date))
                 .map((match) => {
                   const yaVotado = votes.some(v => v.partido_id === match.id && v.usuario === currentUser?.usuario);
                   return (
@@ -370,16 +394,16 @@ export default function QuinielaApp() {
 
         {/* --- PESTAÑA RESULTADOS --- */}
         {activeTab === 'RESULTADOS' && (
-          <div>
+          <div className="w-full">
             <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
               {partidos
                 .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                .map((p) => (
+                .sort((a, b) => getFechaMilisegundos(a.date) - getFechaMilisegundos(b.date))
+                .map((p, index) => (
                 <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg relative overflow-hidden">
                   <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-br-lg tracking-widest z-10">
-                    PARTIDO {p.id}
+                    PARTIDO {String(index + 1).padStart(2, '0')}
                   </div>
                   <div className="pt-3">
                     <p className="text-xs text-gray-500 font-mono mb-1">{p.date}</p>
@@ -406,11 +430,11 @@ export default function QuinielaApp() {
 
         {/* --- PESTAÑA TABLA DE POSICIONES Y ELIMINATORIAS --- */}
         {activeTab === 'POSICIONES_MUNDIAL' && (
-          <div>
+          <div className="w-full">
             <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
             
             {faseGlobal === 'GRUPOS' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
                 {['A','B','C','D','E','F','G','H','I','J','K','L'].map(grupo => {
                   const equiposGrupo = tablaMundial.filter(e => e.grupo === grupo);
                   if (equiposGrupo.length === 0) return null;
@@ -446,8 +470,7 @@ export default function QuinielaApp() {
                 })}
               </div>
             ) : (
-              /* VISTA DE ELIMINATORIAS (VERDE GANADOR / ROJO PERDEDOR) */
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                 {partidos.filter(p => p.fase === faseGlobal).map(p => {
                   const isFinished = p.status === 'FINISHED';
                   const localGano = isFinished && p.goles_local > p.goles_visitante;
@@ -460,19 +483,15 @@ export default function QuinielaApp() {
                       </div>
                       
                       <div className="flex flex-col gap-3 mt-2">
-                        {/* EQUIPO LOCAL */}
                         <div className={`flex justify-between items-center p-3 rounded-lg border ${localGano ? 'bg-green-950/20 border-green-800/50 text-green-400' : isFinished && !localGano ? 'bg-red-950/10 border-red-900/30 text-red-600/80' : 'bg-black border-gray-800 text-white'}`}>
                           <span className="font-sports text-lg tracking-wide">{FLAGS[p.equipo_local] || '🌎'} {p.equipo_local}</span>
                           <span className="font-sports text-2xl">{isFinished ? p.goles_local : '-'}</span>
                         </div>
-                        
-                        {/* EQUIPO VISITANTE */}
                         <div className={`flex justify-between items-center p-3 rounded-lg border ${visitGano ? 'bg-green-950/20 border-green-800/50 text-green-400' : isFinished && !visitGano ? 'bg-red-950/10 border-red-900/30 text-red-600/80' : 'bg-black border-gray-800 text-white'}`}>
                           <span className="font-sports text-lg tracking-wide">{FLAGS[p.equipo_visitante] || '🌎'} {p.equipo_visitante}</span>
                           <span className="font-sports text-2xl">{isFinished ? p.goles_visitante : '-'}</span>
                         </div>
                       </div>
-                      
                       <p className="text-center text-[10px] text-gray-600 font-mono mt-3 uppercase tracking-widest">{p.date}</p>
                     </div>
                   );
@@ -484,42 +503,51 @@ export default function QuinielaApp() {
 
         {/* --- PESTAÑA VOTAR --- */}
         {activeTab === 'VOTAR' && (
-           <div className="bg-gray-900/90 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto shadow-2xl">
-             <h2 className="text-xl font-sports text-red-500 mb-4 uppercase border-b border-gray-800 pb-2">Hacer Predicción</h2>
-             
-             {/* Como ahora tenemos muchos partidos pendientes, es ideal filtrarlos para no abrumar el select */}
+           <div className="w-full">
              <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
-
-             <select className="w-full p-4 mb-6 rounded-lg bg-black text-white font-semibold border border-gray-800 outline-none text-sm focus:border-red-500" value={selectedMatchId} onChange={e => setSelectedMatchId(e.target.value)}>
-               <option value="">-- Selecciona un juego programado --</option>
-               {partidos
-                  .filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario))
-                  .filter(p => (p.fase || 'GRUPOS') === faseGlobal) // Mostramos solo los de la fase seleccionada
-                  .map(p => <option key={p.id} value={p.id}>Partido {p.id} | {p.equipo_local} vs {p.equipo_visitante}</option>)}
-             </select>
              
-             {selectedMatchId && (
-               <div className="flex justify-between items-center mb-6 bg-black p-6 rounded-xl border border-gray-800">
-                 <div className="text-center w-1/3">
-                   <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local}</p>
-                   <input type="number" min="0" value={golesA} onChange={e => setGolesA(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
+             <div className="bg-gray-900/90 p-6 rounded-xl border border-gray-800 max-w-xl mx-auto shadow-2xl mt-6">
+               <h2 className="text-xl font-sports text-red-500 mb-4 uppercase border-b border-gray-800 pb-2">Hacer Predicción</h2>
+               
+               <select className="w-full p-4 mb-6 rounded-lg bg-black text-white font-semibold border border-gray-800 outline-none text-sm focus:border-red-500" value={selectedMatchId} onChange={e => setSelectedMatchId(e.target.value)}>
+                 <option value="">-- Selecciona un juego programado --</option>
+                 {partidos
+                    .filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario))
+                    .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
+                    .map(p => <option key={p.id} value={p.id}>Partido {p.id} | {p.equipo_local} vs {p.equipo_visitante}</option>)}
+               </select>
+               
+               {selectedMatchId && (
+                 <div className="flex justify-between items-center mb-6 bg-black p-6 rounded-xl border border-gray-800">
+                   <div className="text-center w-1/3">
+                     <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local}</p>
+                     <input type="number" min="0" value={golesA} onChange={e => setGolesA(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
+                   </div>
+                   <span className="font-sports text-xl text-red-500">VS</span>
+                   <div className="text-center w-1/3">
+                     <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante}</p>
+                     <input type="number" min="0" value={golesB} onChange={e => setGolesB(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
+                   </div>
                  </div>
-                 <span className="font-sports text-xl text-red-500">VS</span>
-                 <div className="text-center w-1/3">
-                   <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante}</p>
-                   <input type="number" min="0" value={golesB} onChange={e => setGolesB(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
-                 </div>
-               </div>
-             )}
-             <button onClick={handleVote} disabled={!selectedMatchId} className={`w-full font-bold py-4 rounded-lg uppercase tracking-widest text-xs transition ${selectedMatchId ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>Confirmar Predicción</button>
+               )}
+               <button onClick={handleVote} disabled={!selectedMatchId} className={`w-full font-bold py-4 rounded-lg uppercase tracking-widest text-xs transition ${selectedMatchId ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>Confirmar Predicción</button>
+               
+               {/* Mensaje de Vestuario Completo por Fase */}
+               {partidos.filter(p => (p.fase || 'GRUPOS') === faseGlobal).length > 0 && 
+                partidos.filter(p => (p.fase || 'GRUPOS') === faseGlobal && p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario)).length === 0 && (
+                 <p className="text-center text-green-500 mt-6 font-bold tracking-widest text-sm uppercase p-4 bg-green-950/20 border border-green-800 rounded-lg shadow-lg">
+                   ⚽ ¡Vestuario completo! Has votado en toda la fase. ⚽
+                 </p>
+               )}
+             </div>
            </div>
         )}
 
         {/* --- PESTAÑA MI VESTUARIO --- */}
         {activeTab === 'MIS_VOTOS' && (
-           <div>
+           <div className="w-full">
              <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
-             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 w-full">
                {votes
                  .filter(v => v.usuario === currentUser.usuario)
                  .filter(v => {
@@ -588,10 +616,10 @@ export default function QuinielaApp() {
 
         {/* --- PESTAÑA RANKING QUINIELA --- */}
         {activeTab === 'RANKING_QUINIELA' && (
-          <div>
+          <div className="w-full">
             <FasesScroller state={faseRanking} setState={setFaseRanking} extraOption={{ id: 'TOTAL', label: 'TOTAL COMPLETO DEL MUNDIAL' }} />
             
-            <div className="flex flex-col lg:flex-row gap-6">
+            <div className="flex flex-col lg:flex-row gap-6 w-full">
               <div className="flex-1 bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
                 <div className="bg-black p-4 flex justify-between border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
                   <span className="w-12 text-center">Rango</span>

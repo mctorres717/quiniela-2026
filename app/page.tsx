@@ -50,7 +50,8 @@ const getFechaMilisegundos = (dateStr: string) => {
 
 export default function QuinielaApp() {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'DASHBOARD'>('LOGIN');
-  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA' | 'LLAVES_TORNEO'>('PRINCIPAL');
+  // Eliminamos 'LLAVES_TORNEO' del menú principal
+  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA'>('PRINCIPAL');
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [users, setUsers] = useState<any[]>([]);
@@ -60,8 +61,10 @@ export default function QuinielaApp() {
   const [fechaFiltro, setFechaFiltro] = useState('TODAS');
   const [faseGlobal, setFaseGlobal] = useState('GRUPOS');
   const [faseRanking, setFaseRanking] = useState('TOTAL');
+  
+  // Estado interno para la pestaña Posiciones_Mundial (Grupos vs Árbol)
+  const [vistaPosiciones, setVistaPosiciones] = useState<'GRUPOS' | 'ARBOL'>('GRUPOS');
 
-  // Estado para el Zoom del Bracket (Árbol de fases)
   const [zoomLlaves, setZoomLlaves] = useState(1);
 
   const [form, setForm] = useState({ nombre: '', apellido: '', usuario: '', pin: '' });
@@ -112,24 +115,17 @@ export default function QuinielaApp() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // --- MOTOR DE RESOLUCIÓN RECURSIVA DE EQUIPOS ---
   const resolverNombreEquipo = (nombreEquipo: string): string => {
     if (!nombreEquipo || !nombreEquipo.toLowerCase().includes('ganador partido')) return nombreEquipo;
-    
     const matchId = parseInt(nombreEquipo.match(/\d+/)?.[0] || '0');
     const partidoPrevio = partidos.find(p => p.id === matchId);
-    
-    if (!partidoPrevio || partidoPrevio.status !== 'FINISHED') return nombreEquipo; // Si no ha terminado, se queda como "Ganador Partido X"
-    
+    if (!partidoPrevio || partidoPrevio.status !== 'FINISHED') return nombreEquipo;
     const ganadorStr = partidoPrevio.goles_local > partidoPrevio.goles_visitante 
       ? partidoPrevio.equipo_local 
       : partidoPrevio.equipo_visitante;
-      
-    // Recursividad: Por si el ganador era también un "Ganador Partido X" no resuelto directamente en BD
     return resolverNombreEquipo(ganadorStr);
   };
 
-  // --- CONTROLADORES DE EVENTOS DE TECLADO ---
   const handleKeyDownLogin = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleLogin(); };
   const handleKeyDownRegister = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleRegister(); };
 
@@ -233,9 +229,9 @@ export default function QuinielaApp() {
 
   useEffect(() => { setFechaFiltro('TODAS'); }, [faseGlobal]);
 
-  // --- UI COMPONENTS HELPER ---
-  const FasesScroller = ({ state, setState, extraOption }: any) => (
-    <div className="flex overflow-x-auto gap-2 pb-4 border-b border-gray-800 custom-scrollbar mb-6 w-full">
+  // --- UI COMPONENTS HELPER (Ahora acepta prop "wrap" para el ranking) ---
+  const FasesScroller = ({ state, setState, extraOption, wrap = false }: any) => (
+    <div className={`flex gap-2 pb-4 border-b border-gray-800 mb-6 w-full ${wrap ? 'flex-wrap justify-center' : 'overflow-x-auto custom-scrollbar'}`}>
       {extraOption && (
         <button 
           onClick={() => setState(extraOption.id)}
@@ -255,12 +251,10 @@ export default function QuinielaApp() {
     </div>
   );
 
-  // Componente Reutilizable para Tarjetas de Fase Eliminatoria (Usado en Posiciones y Resultados)
   const TarjetaEliminatoria = ({ p }: { p: any }) => {
     const isFinished = p.status === 'FINISHED';
     const localGano = isFinished && p.goles_local > p.goles_visitante;
     const visitGano = isFinished && p.goles_visitante > p.goles_local;
-
     const nombreLocal = resolverNombreEquipo(p.equipo_local);
     const nombreVisitante = resolverNombreEquipo(p.equipo_visitante);
 
@@ -346,8 +340,7 @@ export default function QuinielaApp() {
           { id: 'PRINCIPAL', label: 'Principal' },
           { id: 'CALENDARIO', label: 'Calendario' }, 
           { id: 'RESULTADOS', label: 'Resultados' }, 
-          { id: 'POSICIONES_MUNDIAL', label: 'Fase Grupos' },
-          { id: 'LLAVES_TORNEO', label: 'Fase Eliminatoria (Árbol)' },
+          { id: 'POSICIONES_MUNDIAL', label: 'Tabla / Árbol' }, 
           { id: 'VOTAR', label: 'Votar' }, 
           { id: 'MIS_VOTOS', label: 'Mi Vestuario' }, 
           { id: 'RANKING_QUINIELA', label: 'Ranking Quiniela' }
@@ -370,7 +363,7 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* --- PESTAÑA CALENDARIO --- */}
+        {/* --- CALENDARIO --- */}
         {activeTab === 'CALENDARIO' && (
           <div className="w-full">
             <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
@@ -384,7 +377,6 @@ export default function QuinielaApp() {
                 </select>
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
               {partidos
                 .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
@@ -420,7 +412,7 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* --- PESTAÑA RESULTADOS --- */}
+        {/* --- RESULTADOS --- */}
         {activeTab === 'RESULTADOS' && (
           <div className="w-full">
             <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
@@ -429,14 +421,7 @@ export default function QuinielaApp() {
                 .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
                 .sort((a, b) => getFechaMilisegundos(a.date) - getFechaMilisegundos(b.date))
                 .map((p, index) => {
-                  
-                  // Lógica de Renderizado Dinámico (DRY)
-                  if (faseGlobal !== 'GRUPOS') {
-                    // Si es eliminatoria, renderiza la tarjeta verde/roja
-                     return <TarjetaEliminatoria key={p.id} p={p} />;
-                  }
-
-                  // Si es Fase de Grupos, usa la vista compacta
+                  if (faseGlobal !== 'GRUPOS') return <TarjetaEliminatoria key={p.id} p={p} />;
                   const nombreLocal = resolverNombreEquipo(p.equipo_local);
                   const nombreVisitante = resolverNombreEquipo(p.equipo_visitante);
                   
@@ -469,84 +454,88 @@ export default function QuinielaApp() {
           </div>
         )}
 
-        {/* --- PESTAÑA FASE DE GRUPOS (POSICIONES) --- */}
+        {/* --- POSICIONES MUNDIAL (Fusión: Tabla y Árbol) --- */}
         {activeTab === 'POSICIONES_MUNDIAL' && (
           <div className="w-full">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-4">
-                {['A','B','C','D','E','F','G','H','I','J','K','L'].map(grupo => {
-                  const equiposGrupo = tablaMundial.filter(e => e.grupo === grupo);
-                  if (equiposGrupo.length === 0) return null;
-                  return (
-                    <div key={grupo} className="bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
-                      <div className="bg-red-900/20 p-3 border-b border-red-900/50">
-                        <h3 className="font-sports text-xl text-red-500 tracking-widest">GRUPO {grupo}</h3>
-                      </div>
-                      <table className="w-full text-xs text-left">
-                        <thead className="bg-black text-gray-500 font-bold uppercase">
-                          <tr>
-                            <th className="p-3 text-center">#</th><th className="p-3">Selección</th>
-                            <th className="p-3 text-center">PJ</th><th className="p-3 text-center">PG</th><th className="p-3 text-center">PE</th><th className="p-3 text-center">PP</th>
-                            <th className="p-3 text-center">GF</th><th className="p-3 text-center">GC</th><th className="p-3 text-center">DG</th><th className="p-3 text-center text-white bg-gray-800/50">PTS</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-800/50">
-                          {equiposGrupo.map((eq, idx) => (
-                            <tr key={eq.equipo} className="hover:bg-gray-800/30">
-                              <td className={`p-3 text-center font-bold ${idx < 2 ? 'text-green-500' : 'text-gray-500'}`}>{idx + 1}</td>
-                              <td className="p-3 font-bold text-white truncate max-w-[100px]">{FLAGS[eq.equipo] || '🌎'} {eq.equipo}</td>
-                              <td className="p-3 text-center text-gray-400">{eq.PJ}</td><td className="p-3 text-center text-gray-400">{eq.PG}</td>
-                              <td className="p-3 text-center text-gray-400">{eq.PE}</td><td className="p-3 text-center text-gray-400">{eq.PP}</td>
-                              <td className="p-3 text-center text-gray-400">{eq.GF}</td><td className="p-3 text-center text-gray-400">{eq.GC}</td>
-                              <td className="p-3 text-center font-mono">{eq.DG > 0 ? `+${eq.DG}` : eq.DG}</td>
-                              <td className="p-3 text-center font-sports text-xl text-amber-500 bg-gray-800/30">{eq.PTS}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                })}
+              {/* Botonera interna unificada para esta sección */}
+              <div className="flex overflow-x-auto gap-2 pb-4 border-b border-gray-800 custom-scrollbar mb-6 w-full justify-center">
+                <button 
+                  onClick={() => setVistaPosiciones('GRUPOS')}
+                  className={`flex-none px-6 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all border ${vistaPosiciones === 'GRUPOS' ? 'bg-red-600 border-red-500 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' : 'bg-gray-900 border-gray-800 text-gray-500 hover:text-gray-300'}`}
+                >
+                  Fase de Grupos (Tablas)
+                </button>
+                <button 
+                  onClick={() => setVistaPosiciones('ARBOL')}
+                  className={`flex-none px-6 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all border ${vistaPosiciones === 'ARBOL' ? 'bg-amber-600 border-amber-500 text-white shadow-[0_0_10px_rgba(217,119,6,0.5)]' : 'bg-gray-900 border-gray-800 text-gray-500 hover:text-gray-300'}`}
+                >
+                  Fase Eliminatoria (Árbol)
+                </button>
               </div>
-          </div>
-        )}
 
-        {/* --- NUEVA PESTAÑA: LLAVES (Árbol Eliminatorio Interactiva con Zoom) --- */}
-        {activeTab === 'LLAVES_TORNEO' && (
-          <div className="w-full h-full flex flex-col items-center">
-            
-            {/* Controles de Zoom */}
-            <div className="flex gap-4 mb-4 bg-gray-900 p-2 rounded-xl border border-gray-800">
-              <button onClick={() => setZoomLlaves(prev => Math.max(0.4, prev - 0.1))} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-red-500 font-bold border border-gray-700">- Zoom</button>
-              <button onClick={() => setZoomLlaves(1)} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-white font-bold border border-gray-700">100%</button>
-              <button onClick={() => setZoomLlaves(prev => Math.min(1.5, prev + 0.1))} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-green-500 font-bold border border-gray-700">+ Zoom</button>
-            </div>
-
-            <div className="w-full overflow-auto custom-scrollbar p-6 bg-gray-900/50 rounded-xl border border-gray-800 min-h-[600px] flex justify-center items-start">
-              <div 
-                className="flex gap-8 transition-transform duration-300 ease-in-out" 
-                style={{ transform: `scale(${zoomLlaves})`, transformOrigin: 'top center' }}
-              >
-                {['DIECISEISAVOS', 'OCTAVOS', 'CUARTOS', 'SEMIFINALES', 'FINAL'].map((fase) => (
-                  <div key={fase} className="flex flex-col gap-4 min-w-[220px]">
-                    <div className="bg-red-900/50 text-white text-center py-2 rounded-t-lg font-sports text-xl tracking-widest border-b-2 border-red-500">
-                      {fase}
-                    </div>
-                    <div className="flex flex-col gap-6 justify-center h-full">
-                      {partidos
-                        .filter(p => p.fase === fase)
-                        .sort((a, b) => a.id - b.id) // Orden original de las llaves
-                        .map(p => (
-                          <TarjetaEliminatoria key={p.id} p={p} />
-                        ))}
+              {vistaPosiciones === 'GRUPOS' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-4">
+                  {['A','B','C','D','E','F','G','H','I','J','K','L'].map(grupo => {
+                    const equiposGrupo = tablaMundial.filter(e => e.grupo === grupo);
+                    if (equiposGrupo.length === 0) return null;
+                    return (
+                      <div key={grupo} className="bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">
+                        <div className="bg-red-900/20 p-3 border-b border-red-900/50">
+                          <h3 className="font-sports text-xl text-red-500 tracking-widest">GRUPO {grupo}</h3>
+                        </div>
+                        <table className="w-full text-xs text-left">
+                          <thead className="bg-black text-gray-500 font-bold uppercase">
+                            <tr>
+                              <th className="p-3 text-center">#</th><th className="p-3">Selección</th>
+                              <th className="p-3 text-center">PJ</th><th className="p-3 text-center">PG</th><th className="p-3 text-center">PE</th><th className="p-3 text-center">PP</th>
+                              <th className="p-3 text-center">GF</th><th className="p-3 text-center">GC</th><th className="p-3 text-center">DG</th><th className="p-3 text-center text-white bg-gray-800/50">PTS</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-800/50">
+                            {equiposGrupo.map((eq, idx) => (
+                              <tr key={eq.equipo} className="hover:bg-gray-800/30">
+                                <td className={`p-3 text-center font-bold ${idx < 2 ? 'text-green-500' : 'text-gray-500'}`}>{idx + 1}</td>
+                                <td className="p-3 font-bold text-white truncate max-w-[100px]">{FLAGS[eq.equipo] || '🌎'} {eq.equipo}</td>
+                                <td className="p-3 text-center text-gray-400">{eq.PJ}</td><td className="p-3 text-center text-gray-400">{eq.PG}</td>
+                                <td className="p-3 text-center text-gray-400">{eq.PE}</td><td className="p-3 text-center text-gray-400">{eq.PP}</td>
+                                <td className="p-3 text-center text-gray-400">{eq.GF}</td><td className="p-3 text-center text-gray-400">{eq.GC}</td>
+                                <td className="p-3 text-center font-mono">{eq.DG > 0 ? `+${eq.DG}` : eq.DG}</td>
+                                <td className="p-3 text-center font-sports text-xl text-amber-500 bg-gray-800/30">{eq.PTS}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center mt-4">
+                  <div className="flex gap-4 mb-4 bg-gray-900 p-2 rounded-xl border border-gray-800">
+                    <button onClick={() => setZoomLlaves(prev => Math.max(0.4, prev - 0.1))} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-red-500 font-bold border border-gray-700">- Zoom</button>
+                    <button onClick={() => setZoomLlaves(1)} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-white font-bold border border-gray-700">100%</button>
+                    <button onClick={() => setZoomLlaves(prev => Math.min(1.5, prev + 0.1))} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-green-500 font-bold border border-gray-700">+ Zoom</button>
+                  </div>
+                  <div className="w-full overflow-auto custom-scrollbar p-6 bg-gray-900/50 rounded-xl border border-gray-800 min-h-[600px] flex justify-center items-start">
+                    <div className="flex gap-8 transition-transform duration-300 ease-in-out" style={{ transform: `scale(${zoomLlaves})`, transformOrigin: 'top center' }}>
+                      {['DIECISEISAVOS', 'OCTAVOS', 'CUARTOS', 'SEMIFINALES', 'FINAL'].map((fase) => (
+                        <div key={fase} className="flex flex-col gap-4 min-w-[220px]">
+                          <div className="bg-red-900/50 text-white text-center py-2 rounded-t-lg font-sports text-xl tracking-widest border-b-2 border-red-500">{fase}</div>
+                          <div className="flex flex-col gap-6 justify-center h-full">
+                            {partidos.filter(p => p.fase === fase).sort((a, b) => a.id - b.id).map(p => (
+                                <TarjetaEliminatoria key={p.id} p={p} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              )}
           </div>
         )}
 
-        {/* --- PESTAÑA VOTAR --- */}
+        {/* --- VOTAR --- */}
         {activeTab === 'VOTAR' && (
            <div className="w-full">
              <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
@@ -591,7 +580,7 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* --- PESTAÑA MI VESTUARIO --- */}
+        {/* --- MI VESTUARIO --- */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="w-full">
              <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
@@ -645,13 +634,11 @@ export default function QuinielaApp() {
                          </span>
                        )}
                      </div>
-                     
                      <div className="flex gap-2 w-full md:w-auto justify-end">
                        <div className="bg-black px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[80px]">
                          <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Tu Voto</p>
                          <p className="text-2xl font-sports text-red-500 tracking-widest">{voto.goles_local}-{voto.goles_visitante}</p>
                        </div>
-                       
                        {p.status === 'FINISHED' && (
                          <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[80px]">
                            <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
@@ -666,10 +653,11 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* --- PESTAÑA RANKING QUINIELA --- */}
+        {/* --- RANKING QUINIELA --- */}
         {activeTab === 'RANKING_QUINIELA' && (
           <div className="w-full">
-            <FasesScroller state={faseRanking} setState={setFaseRanking} extraOption={{ id: 'TOTAL', label: 'TOTAL COMPLETO DEL MUNDIAL' }} />
+            {/* Aquí activamos wrap={true} para que no use scroll y quepa en una sola ventana */}
+            <FasesScroller state={faseRanking} setState={setFaseRanking} extraOption={{ id: 'TOTAL', label: 'TOTAL COMPLETO DEL MUNDIAL' }} wrap={true} />
             
             <div className="flex flex-col lg:flex-row gap-6 w-full">
               <div className="flex-1 bg-gray-900/90 rounded-xl border border-gray-800 overflow-hidden shadow-2xl">

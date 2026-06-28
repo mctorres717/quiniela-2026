@@ -39,7 +39,6 @@ const FASES_TORNEO = [
   { id: 'FINAL', label: 'Final' }
 ];
 
-// Función Helper para ordenar fechas tipo "DD/MM/YYYY | HH:MM"
 const getFechaMilisegundos = (dateStr: string) => {
   if (!dateStr) return 0;
   const parts = dateStr.split(' | ');
@@ -51,17 +50,19 @@ const getFechaMilisegundos = (dateStr: string) => {
 
 export default function QuinielaApp() {
   const [view, setView] = useState<'LOGIN' | 'REGISTER' | 'DASHBOARD'>('LOGIN');
-  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA'>('PRINCIPAL');
+  const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA' | 'LLAVES_TORNEO'>('PRINCIPAL');
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [users, setUsers] = useState<any[]>([]);
   const [votes, setVotes] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
   
-  // --- ESTADOS DE NAVEGACIÓN UNIFICADOS ---
   const [fechaFiltro, setFechaFiltro] = useState('TODAS');
   const [faseGlobal, setFaseGlobal] = useState('GRUPOS');
   const [faseRanking, setFaseRanking] = useState('TOTAL');
+
+  // Estado para el Zoom del Bracket (Árbol de fases)
+  const [zoomLlaves, setZoomLlaves] = useState(1);
 
   const [form, setForm] = useState({ nombre: '', apellido: '', usuario: '', pin: '' });
   const [loginForm, setLoginForm] = useState({ usuario: '', pin: '' });
@@ -89,12 +90,6 @@ export default function QuinielaApp() {
         setCurrentUser(JSON.parse(savedUser));
         setView('DASHBOARD');
       }
-      if (!document.querySelector('link[rel="manifest"]')) {
-        const link = document.createElement('link');
-        link.rel = 'manifest';
-        link.href = '/manifest.json';
-        document.head.appendChild(link);
-      }
     }
   }, []);
 
@@ -102,18 +97,13 @@ export default function QuinielaApp() {
     const fetchSupabaseData = async () => {
       const { data: usuariosData } = await supabase.from('usuarios').select('*');
       if (usuariosData) setUsers(usuariosData);
-
       const { data: votosData } = await supabase.from('votos').select('*');
       if (votosData) setVotes(votosData);
-
       const { data: partidosData } = await supabase.from('partidos').select('*').order('id', { ascending: true });
-      if (partidosData) {
-        setPartidos(partidosData);
-      }
+      if (partidosData) setPartidos(partidosData);
     };
 
     fetchSupabaseData();
-
     const channel = supabase.channel('cambios-db')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'votos' }, fetchSupabaseData)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'partidos' }, fetchSupabaseData)
@@ -121,14 +111,28 @@ export default function QuinielaApp() {
 
     return () => { supabase.removeChannel(channel); };
   }, []);
-// --- CONTROLADORES DE EVENTOS DE TECLADO (ENTER) ---
-  const handleKeyDownLogin = (e: React.KeyboardEvent<HTMLInputElement>) => { 
-    if (e.key === 'Enter') handleLogin(); 
+
+  // --- MOTOR DE RESOLUCIÓN RECURSIVA DE EQUIPOS ---
+  const resolverNombreEquipo = (nombreEquipo: string): string => {
+    if (!nombreEquipo || !nombreEquipo.toLowerCase().includes('ganador partido')) return nombreEquipo;
+    
+    const matchId = parseInt(nombreEquipo.match(/\d+/)?.[0] || '0');
+    const partidoPrevio = partidos.find(p => p.id === matchId);
+    
+    if (!partidoPrevio || partidoPrevio.status !== 'FINISHED') return nombreEquipo; // Si no ha terminado, se queda como "Ganador Partido X"
+    
+    const ganadorStr = partidoPrevio.goles_local > partidoPrevio.goles_visitante 
+      ? partidoPrevio.equipo_local 
+      : partidoPrevio.equipo_visitante;
+      
+    // Recursividad: Por si el ganador era también un "Ganador Partido X" no resuelto directamente en BD
+    return resolverNombreEquipo(ganadorStr);
   };
-  
-  const handleKeyDownRegister = (e: React.KeyboardEvent<HTMLInputElement>) => { 
-    if (e.key === 'Enter') handleRegister(); 
-  };
+
+  // --- CONTROLADORES DE EVENTOS DE TECLADO ---
+  const handleKeyDownLogin = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleLogin(); };
+  const handleKeyDownRegister = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') handleRegister(); };
+
   const handleRegister = async () => {
     if (!form.nombre || !form.apellido || !form.usuario || form.pin.length !== 4) return alert('Llena todos los campos');
     const { error } = await supabase.from('usuarios').insert([form]);
@@ -217,7 +221,6 @@ export default function QuinielaApp() {
     }).sort((a, b) => b.puntos - a.puntos);
   };
 
-  // --- OBTENCIÓN DINÁMICA DE FECHAS SEGÚN LA FASE SELECCIONADA ---
   const fechasPorFase = Array.from(new Set(
     partidos
       .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
@@ -228,12 +231,9 @@ export default function QuinielaApp() {
     return new Date(`${yearA}-${monthA}-${dayA}`).getTime() - new Date(`${yearB}-${monthB}-${dayB}`).getTime();
   }) as string[];
 
-  // Efecto para resetear el filtro de fecha si cambiamos de fase
-  useEffect(() => {
-    setFechaFiltro('TODAS');
-  }, [faseGlobal]);
+  useEffect(() => { setFechaFiltro('TODAS'); }, [faseGlobal]);
 
-  // --- UI COMPONENTS HELPER (Scroller 100% Full Width) ---
+  // --- UI COMPONENTS HELPER ---
   const FasesScroller = ({ state, setState, extraOption }: any) => (
     <div className="flex overflow-x-auto gap-2 pb-4 border-b border-gray-800 custom-scrollbar mb-6 w-full">
       {extraOption && (
@@ -254,6 +254,35 @@ export default function QuinielaApp() {
       ))}
     </div>
   );
+
+  // Componente Reutilizable para Tarjetas de Fase Eliminatoria (Usado en Posiciones y Resultados)
+  const TarjetaEliminatoria = ({ p }: { p: any }) => {
+    const isFinished = p.status === 'FINISHED';
+    const localGano = isFinished && p.goles_local > p.goles_visitante;
+    const visitGano = isFinished && p.goles_visitante > p.goles_local;
+
+    const nombreLocal = resolverNombreEquipo(p.equipo_local);
+    const nombreVisitante = resolverNombreEquipo(p.equipo_visitante);
+
+    return (
+      <div key={p.id} className="bg-gray-900/90 p-5 rounded-xl border border-gray-800 shadow-xl relative mt-4">
+        <div className="absolute -top-3 left-4 bg-gray-800 text-gray-400 text-[10px] font-bold px-3 py-1 rounded shadow-md border border-gray-700 tracking-widest">
+          PARTIDO {p.id}
+        </div>
+        <div className="flex flex-col gap-3 mt-2">
+          <div className={`flex justify-between items-center p-3 rounded-lg border ${localGano ? 'bg-green-950/20 border-green-800/50 text-green-400' : isFinished && !localGano ? 'bg-red-950/10 border-red-900/30 text-red-600/80' : 'bg-black border-gray-800 text-white'}`}>
+            <span className="font-sports text-lg tracking-wide">{FLAGS[nombreLocal] || '🌎'} {nombreLocal}</span>
+            <span className="font-sports text-2xl">{isFinished ? p.goles_local : '-'}</span>
+          </div>
+          <div className={`flex justify-between items-center p-3 rounded-lg border ${visitGano ? 'bg-green-950/20 border-green-800/50 text-green-400' : isFinished && !visitGano ? 'bg-red-950/10 border-red-900/30 text-red-600/80' : 'bg-black border-gray-800 text-white'}`}>
+            <span className="font-sports text-lg tracking-wide">{FLAGS[nombreVisitante] || '🌎'} {nombreVisitante}</span>
+            <span className="font-sports text-2xl">{isFinished ? p.goles_visitante : '-'}</span>
+          </div>
+        </div>
+        <p className="text-center text-[10px] text-gray-600 font-mono mt-3 uppercase tracking-widest">{p.date}</p>
+      </div>
+    );
+  };
 
   if (view === 'LOGIN' || view === 'REGISTER') {
     return (
@@ -317,7 +346,8 @@ export default function QuinielaApp() {
           { id: 'PRINCIPAL', label: 'Principal' },
           { id: 'CALENDARIO', label: 'Calendario' }, 
           { id: 'RESULTADOS', label: 'Resultados' }, 
-          { id: 'POSICIONES_MUNDIAL', label: 'Tabla / Fases' },
+          { id: 'POSICIONES_MUNDIAL', label: 'Fase Grupos' },
+          { id: 'LLAVES_TORNEO', label: 'Fase Eliminatoria (Árbol)' },
           { id: 'VOTAR', label: 'Votar' }, 
           { id: 'MIS_VOTOS', label: 'Mi Vestuario' }, 
           { id: 'RANKING_QUINIELA', label: 'Ranking Quiniela' }
@@ -337,9 +367,6 @@ export default function QuinielaApp() {
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
             <h1 className="text-5xl md:text-7xl font-sports text-red-500 mb-2 tracking-widest drop-shadow-2xl">Quiniela Mundial de Futbol 2026</h1>
             <h2 className="text-xl md:text-3xl font-sports text-white mb-10 tracking-widest text-shadow-sm">Mundial México – Canadá – USA 2026</h2>
-            <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800 shadow-2xl backdrop-blur-sm">
-              <img src="/mascotas.png" alt="Mascotas" className="w-64 md:w-80 h-auto object-contain drop-shadow-lg" onError={(e) => e.currentTarget.style.display = 'none'} />
-            </div>
           </div>
         )}
 
@@ -347,14 +374,12 @@ export default function QuinielaApp() {
         {activeTab === 'CALENDARIO' && (
           <div className="w-full">
             <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
-            
             <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 mb-6 flex flex-col md:flex-row justify-between items-center gap-4 w-full">
               <h2 className="text-red-500 font-bold uppercase tracking-widest text-sm">Calendario Oficial - {faseGlobal.replace('_', ' ')}</h2>
-              
               <div className="flex items-center gap-2 w-full md:w-auto">
                 <span className="text-[10px] text-gray-500 uppercase font-bold">Buscar Fecha:</span>
                 <select value={fechaFiltro} onChange={(e) => setFechaFiltro(e.target.value)} className="bg-black text-white font-bold border border-gray-700 rounded p-2 text-sm outline-none w-full md:w-auto focus:border-red-500">
-                  <option value="TODAS">Todas las fechas de la fase</option>
+                  <option value="TODAS">Todas las fechas</option>
                   {fechasPorFase.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
@@ -367,12 +392,15 @@ export default function QuinielaApp() {
                 .sort((a, b) => getFechaMilisegundos(a.date) - getFechaMilisegundos(b.date))
                 .map((match) => {
                   const yaVotado = votes.some(v => v.partido_id === match.id && v.usuario === currentUser?.usuario);
+                  const nombreLocal = resolverNombreEquipo(match.equipo_local);
+                  const nombreVisitante = resolverNombreEquipo(match.equipo_visitante);
+                  
                   return (
-                    <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg transition-transform hover:scale-[1.02] relative">
+                    <div key={match.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg transition-transform hover:scale-[1.02] relative mt-2">
                       <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-br-lg tracking-widest z-10">
                         PARTIDO {match.id}
                       </div>
-                      <div className="w-[35%] text-center pt-4"><span className="font-sports text-lg tracking-wider block truncate">{FLAGS[match.equipo_local] || '🌎'} {match.equipo_local}</span></div>
+                      <div className="w-[35%] text-center pt-4"><span className="font-sports text-lg tracking-wider block truncate">{FLAGS[nombreLocal] || '🌎'} {nombreLocal}</span></div>
                       <div className="w-[30%] flex flex-col items-center pt-4">
                         <span className="text-[9px] text-gray-500 mb-1 font-mono">{match.date.split(' | ')[1]}</span>
                         <span className={`px-3 py-1 rounded text-lg font-sports tracking-widest ${match.status === 'FINISHED' ? 'bg-red-600 text-white shadow-md border border-red-500' : 'bg-black text-gray-500 border border-gray-800'}`}>
@@ -384,7 +412,7 @@ export default function QuinielaApp() {
                           </button>
                         )}
                       </div>
-                      <div className="w-[35%] text-center pt-4"><span className="font-sports text-lg tracking-wider block truncate">{match.equipo_visitante} {FLAGS[match.equipo_visitante] || '🌎'}</span></div>
+                      <div className="w-[35%] text-center pt-4"><span className="font-sports text-lg tracking-wider block truncate">{nombreVisitante} {FLAGS[nombreVisitante] || '🌎'}</span></div>
                     </div>
                   );
               })}
@@ -400,41 +428,51 @@ export default function QuinielaApp() {
               {partidos
                 .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
                 .sort((a, b) => getFechaMilisegundos(a.date) - getFechaMilisegundos(b.date))
-                .map((p, index) => (
-                <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg relative overflow-hidden">
-                  <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-br-lg tracking-widest z-10">
-                    PARTIDO {String(index + 1).padStart(2, '0')}
-                  </div>
-                  <div className="pt-3">
-                    <p className="text-xs text-gray-500 font-mono mb-1">{p.date}</p>
-                    <p className="font-sports text-xl tracking-wider text-white">
-                      {FLAGS[p.equipo_local] || '🌎'} {p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-2">vs</span> {p.equipo_visitante} {FLAGS[p.equipo_visitante] || '🌎'}
-                    </p>
-                  </div>
-                  {p.status === 'FINISHED' ? (
-                    <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
-                      <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
-                      <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                .map((p, index) => {
+                  
+                  // Lógica de Renderizado Dinámico (DRY)
+                  if (faseGlobal !== 'GRUPOS') {
+                    // Si es eliminatoria, renderiza la tarjeta verde/roja
+                     return <TarjetaEliminatoria key={p.id} p={p} />;
+                  }
+
+                  // Si es Fase de Grupos, usa la vista compacta
+                  const nombreLocal = resolverNombreEquipo(p.equipo_local);
+                  const nombreVisitante = resolverNombreEquipo(p.equipo_visitante);
+                  
+                  return (
+                    <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg relative overflow-hidden mt-2">
+                      <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-br-lg tracking-widest z-10">
+                        PARTIDO {String(index + 1).padStart(2, '0')}
+                      </div>
+                      <div className="pt-3">
+                        <p className="text-xs text-gray-500 font-mono mb-1">{p.date}</p>
+                        <p className="font-sports text-xl tracking-wider text-white">
+                          {FLAGS[nombreLocal] || '🌎'} {nombreLocal} <span className="text-gray-600 font-sans text-xs normal-case mx-2">vs</span> {nombreVisitante} {FLAGS[nombreVisitante] || '🌎'}
+                        </p>
+                      </div>
+                      {p.status === 'FINISHED' ? (
+                        <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
+                          <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
+                          <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                        </div>
+                      ) : (
+                        <div className="bg-black/50 px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[90px]">
+                          <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Pendiente</p>
+                          <p className="text-lg font-sports text-gray-700 tracking-widest">- / -</p>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="bg-black/50 px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[90px]">
-                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Pendiente</p>
-                      <p className="text-lg font-sports text-gray-700 tracking-widest">- / -</p>
-                    </div>
-                  )}
-                </div>
-              ))}
+                  )
+              })}
             </div>
           </div>
         )}
 
-        {/* --- PESTAÑA TABLA DE POSICIONES Y ELIMINATORIAS --- */}
+        {/* --- PESTAÑA FASE DE GRUPOS (POSICIONES) --- */}
         {activeTab === 'POSICIONES_MUNDIAL' && (
           <div className="w-full">
-            <FasesScroller state={faseGlobal} setState={setFaseGlobal} />
-            
-            {faseGlobal === 'GRUPOS' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full mt-4">
                 {['A','B','C','D','E','F','G','H','I','J','K','L'].map(grupo => {
                   const equiposGrupo = tablaMundial.filter(e => e.grupo === grupo);
                   if (equiposGrupo.length === 0) return null;
@@ -469,35 +507,42 @@ export default function QuinielaApp() {
                   );
                 })}
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
-                {partidos.filter(p => p.fase === faseGlobal).map(p => {
-                  const isFinished = p.status === 'FINISHED';
-                  const localGano = isFinished && p.goles_local > p.goles_visitante;
-                  const visitGano = isFinished && p.goles_visitante > p.goles_local;
+          </div>
+        )}
 
-                  return (
-                    <div key={p.id} className="bg-gray-900/90 p-5 rounded-xl border border-gray-800 shadow-xl relative mt-4">
-                      <div className="absolute -top-3 left-4 bg-gray-800 text-gray-400 text-[10px] font-bold px-3 py-1 rounded shadow-md border border-gray-700 tracking-widest">
-                        PARTIDO {p.id}
-                      </div>
-                      
-                      <div className="flex flex-col gap-3 mt-2">
-                        <div className={`flex justify-between items-center p-3 rounded-lg border ${localGano ? 'bg-green-950/20 border-green-800/50 text-green-400' : isFinished && !localGano ? 'bg-red-950/10 border-red-900/30 text-red-600/80' : 'bg-black border-gray-800 text-white'}`}>
-                          <span className="font-sports text-lg tracking-wide">{FLAGS[p.equipo_local] || '🌎'} {p.equipo_local}</span>
-                          <span className="font-sports text-2xl">{isFinished ? p.goles_local : '-'}</span>
-                        </div>
-                        <div className={`flex justify-between items-center p-3 rounded-lg border ${visitGano ? 'bg-green-950/20 border-green-800/50 text-green-400' : isFinished && !visitGano ? 'bg-red-950/10 border-red-900/30 text-red-600/80' : 'bg-black border-gray-800 text-white'}`}>
-                          <span className="font-sports text-lg tracking-wide">{FLAGS[p.equipo_visitante] || '🌎'} {p.equipo_visitante}</span>
-                          <span className="font-sports text-2xl">{isFinished ? p.goles_visitante : '-'}</span>
-                        </div>
-                      </div>
-                      <p className="text-center text-[10px] text-gray-600 font-mono mt-3 uppercase tracking-widest">{p.date}</p>
+        {/* --- NUEVA PESTAÑA: LLAVES (Árbol Eliminatorio Interactiva con Zoom) --- */}
+        {activeTab === 'LLAVES_TORNEO' && (
+          <div className="w-full h-full flex flex-col items-center">
+            
+            {/* Controles de Zoom */}
+            <div className="flex gap-4 mb-4 bg-gray-900 p-2 rounded-xl border border-gray-800">
+              <button onClick={() => setZoomLlaves(prev => Math.max(0.4, prev - 0.1))} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-red-500 font-bold border border-gray-700">- Zoom</button>
+              <button onClick={() => setZoomLlaves(1)} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-white font-bold border border-gray-700">100%</button>
+              <button onClick={() => setZoomLlaves(prev => Math.min(1.5, prev + 0.1))} className="bg-black hover:bg-gray-800 px-4 py-2 rounded text-green-500 font-bold border border-gray-700">+ Zoom</button>
+            </div>
+
+            <div className="w-full overflow-auto custom-scrollbar p-6 bg-gray-900/50 rounded-xl border border-gray-800 min-h-[600px] flex justify-center items-start">
+              <div 
+                className="flex gap-8 transition-transform duration-300 ease-in-out" 
+                style={{ transform: `scale(${zoomLlaves})`, transformOrigin: 'top center' }}
+              >
+                {['DIECISEISAVOS', 'OCTAVOS', 'CUARTOS', 'SEMIFINALES', 'FINAL'].map((fase) => (
+                  <div key={fase} className="flex flex-col gap-4 min-w-[220px]">
+                    <div className="bg-red-900/50 text-white text-center py-2 rounded-t-lg font-sports text-xl tracking-widest border-b-2 border-red-500">
+                      {fase}
                     </div>
-                  );
-                })}
+                    <div className="flex flex-col gap-6 justify-center h-full">
+                      {partidos
+                        .filter(p => p.fase === fase)
+                        .sort((a, b) => a.id - b.id) // Orden original de las llaves
+                        .map(p => (
+                          <TarjetaEliminatoria key={p.id} p={p} />
+                        ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -514,25 +559,28 @@ export default function QuinielaApp() {
                  {partidos
                     .filter(p => p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario))
                     .filter(p => (p.fase || 'GRUPOS') === faseGlobal)
-                    .map(p => <option key={p.id} value={p.id}>Partido {p.id} | {p.equipo_local} vs {p.equipo_visitante}</option>)}
+                    .map(p => {
+                      const nLocal = resolverNombreEquipo(p.equipo_local);
+                      const nVisitante = resolverNombreEquipo(p.equipo_visitante);
+                      return <option key={p.id} value={p.id}>Partido {p.id} | {nLocal} vs {nVisitante}</option>
+                    })}
                </select>
                
                {selectedMatchId && (
                  <div className="flex justify-between items-center mb-6 bg-black p-6 rounded-xl border border-gray-800">
                    <div className="text-center w-1/3">
-                     <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local}</p>
+                     <p className="font-sports text-lg mb-2 text-gray-300 truncate">{resolverNombreEquipo(partidos.find(p => p.id === Number(selectedMatchId))?.equipo_local || '')}</p>
                      <input type="number" min="0" value={golesA} onChange={e => setGolesA(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
                    </div>
                    <span className="font-sports text-xl text-red-500">VS</span>
                    <div className="text-center w-1/3">
-                     <p className="font-sports text-lg mb-2 text-gray-300 truncate">{partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante}</p>
+                     <p className="font-sports text-lg mb-2 text-gray-300 truncate">{resolverNombreEquipo(partidos.find(p => p.id === Number(selectedMatchId))?.equipo_visitante || '')}</p>
                      <input type="number" min="0" value={golesB} onChange={e => setGolesB(e.target.value)} className="w-16 text-center text-3xl font-sports bg-gray-900 border border-gray-700 p-2 rounded text-white outline-none focus:border-red-500" />
                    </div>
                  </div>
                )}
                <button onClick={handleVote} disabled={!selectedMatchId} className={`w-full font-bold py-4 rounded-lg uppercase tracking-widest text-xs transition ${selectedMatchId ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg' : 'bg-gray-800 text-gray-600 cursor-not-allowed'}`}>Confirmar Predicción</button>
                
-               {/* Mensaje de Vestuario Completo por Fase */}
                {partidos.filter(p => (p.fase || 'GRUPOS') === faseGlobal).length > 0 && 
                 partidos.filter(p => (p.fase || 'GRUPOS') === faseGlobal && p.status === 'PENDING' && !votes.some(v => v.partido_id === p.id && v.usuario === currentUser?.usuario)).length === 0 && (
                  <p className="text-center text-green-500 mt-6 font-bold tracking-widest text-sm uppercase p-4 bg-green-950/20 border border-green-800 rounded-lg shadow-lg">
@@ -556,12 +604,16 @@ export default function QuinielaApp() {
                  })
                  .map((voto, idx) => {
                  const p = partidos.find(pa => pa.id === voto.partido_id);
+                 if(!p) return null;
+
+                 const nombreLocal = resolverNombreEquipo(p.equipo_local);
+                 const nombreVisitante = resolverNombreEquipo(p.equipo_visitante);
                  
                  let puntosGanados = 0;
                  let estiloCard = "border-gray-800 bg-gray-900/90";
                  let colorTextoPuntos = "text-gray-500";
                  
-                 if (p?.status === 'FINISHED' && p?.goles_local !== null) {
+                 if (p.status === 'FINISHED' && p.goles_local !== null) {
                    const acertoMarcador = (voto.goles_local === p.goles_local && voto.goles_visitante === p.goles_visitante);
                    const acertoGanador = (voto.goles_local > voto.goles_visitante && p.goles_local > p.goles_visitante) || 
                                          (voto.goles_local < voto.goles_visitante && p.goles_local < p.goles_visitante) || 
@@ -581,13 +633,13 @@ export default function QuinielaApp() {
                  return (
                    <div key={idx} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between items-center shadow-lg transition-all gap-4 ${estiloCard} relative pt-6`}>
                      <div className="absolute top-0 left-0 bg-gray-800 text-gray-300 text-[9px] font-bold px-2 py-0.5 rounded-br-lg tracking-widest z-10">
-                        PARTIDO {p?.id}
+                        PARTIDO {p.id}
                      </div>
                      <div className="w-full md:w-auto">
-                       <p className="text-[10px] text-gray-400 font-mono mb-0.5">🗓️ Fecha de Juego: {p?.date}</p>
+                       <p className="text-[10px] text-gray-400 font-mono mb-0.5">🗓️ Fecha de Juego: {p.date}</p>
                        <p className="text-[10px] text-blue-400 font-mono mb-2">⏱️ Votado el: {fechaVotoFormat}</p>
-                       <p className="font-sports text-xl text-white tracking-wider">{FLAGS[p?.equipo_local] || '🌎'} {p?.equipo_local} <span className="text-gray-600 text-xs font-sans normal-case mx-1">vs</span> {p?.equipo_visitante} {FLAGS[p?.equipo_visitante] || '🌎'}</p>
-                       {p?.status === 'FINISHED' && (
+                       <p className="font-sports text-xl text-white tracking-wider">{FLAGS[nombreLocal] || '🌎'} {nombreLocal} <span className="text-gray-600 text-xs font-sans normal-case mx-1">vs</span> {nombreVisitante} {FLAGS[nombreVisitante] || '🌎'}</p>
+                       {p.status === 'FINISHED' && (
                          <span className={`text-[10px] font-bold uppercase tracking-widest block mt-2 ${colorTextoPuntos}`}>
                            {puntosGanados > 0 ? `+${puntosGanados} Puntos Obtenidos` : '0 Puntos (Fallo)'}
                          </span>
@@ -600,10 +652,10 @@ export default function QuinielaApp() {
                          <p className="text-2xl font-sports text-red-500 tracking-widest">{voto.goles_local}-{voto.goles_visitante}</p>
                        </div>
                        
-                       {p?.status === 'FINISHED' && (
+                       {p.status === 'FINISHED' && (
                          <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[80px]">
                            <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
-                           <p className="text-2xl font-sports text-red-500 tracking-widest">{p?.goles_local}-{p?.goles_visitante}</p>
+                           <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local}-{p.goles_visitante}</p>
                          </div>
                        )}
                      </div>

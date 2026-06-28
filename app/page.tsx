@@ -34,13 +34,18 @@ export default function QuinielaApp() {
   const [activeTab, setActiveTab] = useState<'PRINCIPAL' | 'CALENDARIO' | 'RESULTADOS' | 'POSICIONES_MUNDIAL' | 'VOTAR' | 'MIS_VOTOS' | 'RANKING_QUINIELA'>('PRINCIPAL');
   const [currentUser, setCurrentUser] = useState<any>(null);
   
+  // --- ESTADOS DE DATOS ---
   const [users, setUsers] = useState<any[]>([]);
   const [votes, setVotes] = useState<any[]>([]);
   const [partidos, setPartidos] = useState<any[]>([]);
   const [fechasMundial, setFechasMundial] = useState<string[]>([]);
+  
+  // --- ESTADOS DE UI & FILTROS ---
   const [fechaHoyStr, setFechaHoyStr] = useState('');
   const [grupoActivo, setGrupoActivo] = useState('HOY');
+  const [faseResultados, setFaseResultados] = useState('GRUPOS'); // Sub-navegación de fases
 
+  // --- ESTADOS DE FORMULARIOS ---
   const [form, setForm] = useState({ nombre: '', apellido: '', usuario: '', pin: '' });
   const [loginForm, setLoginForm] = useState({ usuario: '', pin: '' });
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -50,6 +55,7 @@ export default function QuinielaApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  // --- CONTROL DE SESIÓN ---
   const handleLogout = () => {
     setCurrentUser(null);
     setView('LOGIN');
@@ -104,12 +110,12 @@ export default function QuinielaApp() {
     };
   }, [currentUser]);
 
+  // --- FETCH DE DATOS DESDE SUPABASE ---
   useEffect(() => {
     const fetchSupabaseData = async () => {
       const { data: usuariosData } = await supabase.from('usuarios').select('*');
       if (usuariosData) setUsers(usuariosData);
 
-      // Ahora Supabase traerá todos los campos, incluyendo la nueva columna 'fecha_voto'
       const { data: votosData } = await supabase.from('votos').select('*');
       if (votosData) setVotes(votosData);
 
@@ -157,7 +163,7 @@ export default function QuinielaApp() {
     else alert('Usuario o PIN incorrecto.');
   };
 
-  // --- MOTOR DE VOTOS CON INYECCIÓN DIRECTA A BASE DE DATOS ---
+  // --- MOTOR DE VOTOS CON INYECCIÓN DE TIMESTAMP ROBUSTA ---
   const handleVote = async () => {
     if (!selectedMatchId || golesA === '' || golesB === '') return alert('Completa los campos');
     
@@ -169,15 +175,18 @@ export default function QuinielaApp() {
       partido_id: partidoIdNum, 
       goles_local: Number(golesA), 
       goles_visitante: Number(golesB),
-      fecha_voto: timestampActual // <- Se envía la fecha directamente a la nube
+      fecha_voto: timestampActual
     };
 
     const { data, error } = await supabase.from('votos').insert([newVote]).select();
     
     if (error) {
-      alert(`Error de DB: ${error.message}. (Verifica que creaste la columna fecha_voto)`);
+      alert(`Error de DB: ${error.message}. (Verifica la columna fecha_voto)`);
     } else { 
       alert('¡Predicción guardada!'); 
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`vote_time_${currentUser.usuario}_${partidoIdNum}`, timestampActual);
+      }
       setGolesA(''); 
       setGolesB(''); 
       setSelectedMatchId(''); 
@@ -279,7 +288,13 @@ export default function QuinielaApp() {
 
   return (
     <div className="min-h-screen bg-black text-white relative">
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap'); 
+        .font-sports { font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; }
+        .custom-scrollbar::-webkit-scrollbar { height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #111827; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #ef4444; border-radius: 4px; }
+      `}</style>
       <div className="fixed inset-0 opacity-10 pointer-events-none z-0" style={{ backgroundImage: "url('/image_c70199.jpg')", backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }}></div>
 
       <header className="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center relative z-10">
@@ -305,7 +320,7 @@ export default function QuinielaApp() {
         </div>
       </header>
 
-      <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
+      <div className="flex overflow-x-auto bg-gray-900 border-b border-gray-800 sticky top-0 z-20 custom-scrollbar">
         {[
           { id: 'PRINCIPAL', label: 'Principal' },
           { id: 'CALENDARIO', label: 'Calendario' }, 
@@ -342,7 +357,7 @@ export default function QuinielaApp() {
 
         {activeTab === 'CALENDARIO' && (
           <div className="flex flex-col md:flex-row gap-6">
-            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0">
+            <div className="w-full md:w-48 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 custom-scrollbar">
               <button onClick={() => setGrupoActivo('HOY')} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === 'HOY' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>FECHAS</button>
               {['A','B','C','D','E','F','G','H','I','J','K','L'].map(g => (
                 <button key={g} onClick={() => setGrupoActivo(g)} className={`px-4 py-2.5 flex-none md:w-full rounded text-xs font-bold tracking-wider uppercase transition-colors ${grupoActivo === g ? 'bg-red-600 text-white shadow-md' : 'bg-gray-900 text-gray-400 border border-gray-800'}`}>GRUPO {g}</button>
@@ -389,29 +404,74 @@ export default function QuinielaApp() {
           </div>
         )}
 
+        {/* --- PESTAÑA RESULTADOS: NUEVA ARQUITECTURA DE FASES --- */}
         {activeTab === 'RESULTADOS' && (
+          <div className="space-y-6">
+            <div className="flex overflow-x-auto gap-2 pb-4 border-b border-gray-800 custom-scrollbar">
+              {[
+                { id: 'GRUPOS', label: 'Fase de Grupos' },
+                { id: 'DIECISEISAVOS', label: 'Dieciseisavos de final' },
+                { id: 'OCTAVOS', label: 'Octavos de final' },
+                { id: 'CUARTOS', label: 'Cuartos de final' },
+                { id: 'SEMIFINALES', label: 'Semifinales' },
+                { id: 'TERCER_PUESTO', label: 'Tercer puesto' },
+                { id: 'FINAL', label: 'Final Mundial' }
+              ].map(fase => (
+                <button 
+                  key={fase.id} 
+                  onClick={() => setFaseResultados(fase.id)}
+                  className={`flex-none px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all border ${
+                    faseResultados === fase.id 
+                      ? 'bg-red-600 border-red-500 text-white shadow-[0_0_10px_rgba(220,38,38,0.5)]' 
+                      : 'bg-gray-900 border-gray-800 text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {fase.label}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {partidos
-                .filter(p => p.status === 'FINISHED')
-                .sort((a, b) => {
-                  const dayA = parseInt(a.date.split(' ')[0]) || 0;
-                  const dayB = parseInt(b.date.split(' ')[0]) || 0;
-                  if (dayA !== dayB) return dayA - dayB;
-                  const timeA = a.date.split('|')[1]?.trim() || "00:00";
-                  const timeB = b.date.split('|')[1]?.trim() || "00:00";
-                  return timeA.localeCompare(timeB);
-                })
-                .map(p => (
-                <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg">
-                  <div><p className="text-xs text-gray-500 font-mono">{p.date}</p><p className="font-sports text-xl tracking-wider">{FLAGS[p.equipo_local]} {p.equipo_local} <span className="text-gray-600 font-sans text-xs normal-case mx-1">vs</span> {p.equipo_visitante} {FLAGS[p.equipo_visitante]}</p></div>
-                  <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
-                    <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
-                    <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                .filter(p => (p.fase || 'GRUPOS') === faseResultados)
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .map((p, index) => (
+                <div key={p.id} className="bg-gray-900/90 p-4 rounded-xl border border-gray-800 flex justify-between items-center shadow-lg relative overflow-hidden">
+                  
+                  <div className="absolute top-0 left-0 bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-br-lg tracking-widest z-10">
+                    PARTIDO {String(index + 1).padStart(2, '0')}
                   </div>
+
+                  <div className="pt-3">
+                    <p className="text-xs text-gray-500 font-mono mb-1">{p.date}</p>
+                    <p className="font-sports text-xl tracking-wider text-white">
+                      {FLAGS[p.equipo_local] || '🌎'} {p.equipo_local} 
+                      <span className="text-gray-600 font-sans text-xs normal-case mx-2">vs</span> 
+                      {p.equipo_visitante} {FLAGS[p.equipo_visitante] || '🌎'}
+                    </p>
+                  </div>
+
+                  {p.status === 'FINISHED' ? (
+                    <div className="bg-red-900/20 px-4 py-2 rounded-lg border border-red-500/20 text-center min-w-[90px]">
+                      <p className="text-[9px] text-red-400 uppercase font-bold tracking-wide">Oficial</p>
+                      <p className="text-2xl font-sports text-red-500 tracking-widest">{p.goles_local} - {p.goles_visitante}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-black/50 px-4 py-2 rounded-lg border border-gray-800 text-center min-w-[90px]">
+                      <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Pendiente</p>
+                      <p className="text-lg font-sports text-gray-700 tracking-widest">- / -</p>
+                    </div>
+                  )}
                 </div>
               ))}
-              {partidos.filter(p => p.status === 'FINISHED').length === 0 && <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium">Esperando el pitazo inicial de la FIFA...</p>}
+
+              {partidos.filter(p => (p.fase || 'GRUPOS') === faseResultados).length === 0 && (
+                <p className="text-gray-500 text-center py-10 w-full col-span-2 text-sm font-medium border border-dashed border-gray-800 rounded-xl">
+                  Aún no hay partidos definidos para esta fase.
+                </p>
+              )}
             </div>
+          </div>
         )}
 
         {activeTab === 'POSICIONES_MUNDIAL' && (
@@ -494,7 +554,6 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA MI VESTUARIO - LECTURA DIRECTA DESDE BASE DE DATOS */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
@@ -518,8 +577,7 @@ export default function QuinielaApp() {
                  }
                }
 
-               // ÚNICA FUENTE DE VERDAD: La Base de Datos Nube (Supabase)
-               const fechaVotoRaw = voto.fecha_voto || voto.created_at;
+               const fechaVotoRaw = voto.fecha_voto || voto.created_at || (typeof window !== 'undefined' ? localStorage.getItem(`vote_time_${voto.usuario}_${voto.partido_id}`) : null);
 
                const fechaVotoFormat = fechaVotoRaw 
                 ? new Date(fechaVotoRaw).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 

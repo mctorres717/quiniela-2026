@@ -50,7 +50,6 @@ export default function QuinielaApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // LÓGICA DE AUTO-LOGOUT Y BORRADO DE SESIÓN
   const handleLogout = () => {
     setCurrentUser(null);
     setView('LOGIN');
@@ -60,7 +59,6 @@ export default function QuinielaApp() {
     }
   };
 
-  // INYECTOR AUTOMÁTICO DE PWA Y RECUPERADOR DE SESIÓN
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedUser = localStorage.getItem('currentUser');
@@ -79,20 +77,15 @@ export default function QuinielaApp() {
 
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then((reg) => {
-            console.log('PWA Service Worker en marcha en:', reg.scope);
-          });
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
         });
       }
     }
   }, []);
 
-  // VIGILANTE DE INACTIVIDAD DE 5 MINUTOS
   useEffect(() => {
     if (!currentUser) return;
-
     let inactivityTimeout: NodeJS.Timeout;
-
     const resetInactivityTimer = () => {
       clearTimeout(inactivityTimeout);
       inactivityTimeout = setTimeout(() => {
@@ -103,7 +96,6 @@ export default function QuinielaApp() {
 
     const userEvents = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
     userEvents.forEach(event => window.addEventListener(event, resetInactivityTimer));
-
     resetInactivityTimer();
 
     return () => {
@@ -117,6 +109,7 @@ export default function QuinielaApp() {
       const { data: usuariosData } = await supabase.from('usuarios').select('*');
       if (usuariosData) setUsers(usuariosData);
 
+      // Ahora Supabase traerá todos los campos, incluyendo la nueva columna 'fecha_voto'
       const { data: votosData } = await supabase.from('votos').select('*');
       if (votosData) setVotes(votosData);
 
@@ -164,7 +157,7 @@ export default function QuinielaApp() {
     else alert('Usuario o PIN incorrecto.');
   };
 
-  // --- MOTOR DE VOTOS TOTALMENTE CORREGIDO Y BLINDADO ---
+  // --- MOTOR DE VOTOS CON INYECCIÓN DIRECTA A BASE DE DATOS ---
   const handleVote = async () => {
     if (!selectedMatchId || golesA === '' || golesB === '') return alert('Completa los campos');
     
@@ -175,25 +168,21 @@ export default function QuinielaApp() {
       usuario: currentUser.usuario, 
       partido_id: partidoIdNum, 
       goles_local: Number(golesA), 
-      goles_visitante: Number(golesB) 
+      goles_visitante: Number(golesB),
+      fecha_voto: timestampActual // <- Se envía la fecha directamente a la nube
     };
 
     const { data, error } = await supabase.from('votos').insert([newVote]).select();
     
-    if (error) alert(`Error: ${error.message}`);
-    else { 
+    if (error) {
+      alert(`Error de DB: ${error.message}. (Verifica que creaste la columna fecha_voto)`);
+    } else { 
       alert('¡Predicción guardada!'); 
-      
-      // RESPALDO ARQUITECTÓNICO: Guardamos la estampa de tiempo localmente indexada por usuario y partido
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`vote_time_${currentUser.usuario}_${partidoIdNum}`, timestampActual);
-      }
-
       setGolesA(''); 
       setGolesB(''); 
       setSelectedMatchId(''); 
       
-      const votoConfirmado = data && data.length > 0 ? data[0] : { ...newVote, created_at: timestampActual };
+      const votoConfirmado = data && data.length > 0 ? data[0] : newVote;
       setVotes([...votes, votoConfirmado]); 
     }
   };
@@ -505,7 +494,7 @@ export default function QuinielaApp() {
            </div>
         )}
 
-        {/* PESTAÑA MI VESTUARIO - RESPALDADA CON LOCALSTORAGE COMPATIBLE */}
+        {/* PESTAÑA MI VESTUARIO - LECTURA DIRECTA DESDE BASE DE DATOS */}
         {activeTab === 'MIS_VOTOS' && (
            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
              {votes.filter(v => v.usuario === currentUser.usuario).map((voto, idx) => {
@@ -529,8 +518,8 @@ export default function QuinielaApp() {
                  }
                }
 
-               // DOBLE REVISIÓN: Lee desde Supabase o desde el almacenamiento local persistido en handleVote
-               const fechaVotoRaw = voto.created_at || (typeof window !== 'undefined' ? localStorage.getItem(`vote_time_${voto.usuario}_${voto.partido_id}`) : null);
+               // ÚNICA FUENTE DE VERDAD: La Base de Datos Nube (Supabase)
+               const fechaVotoRaw = voto.fecha_voto || voto.created_at;
 
                const fechaVotoFormat = fechaVotoRaw 
                 ? new Date(fechaVotoRaw).toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) 
